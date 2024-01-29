@@ -3,17 +3,20 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
   inherit = CounterfactualMethodClassif,
   
   public = list(
-    initialize = function(predictor, n_synth = 10L, importance_method = "fastshap") { 
+    initialize = function(predictor, max_feats_to_change = 1L, n_synth = 10L, importance_method = "fastshap") { 
       # TODO: add other hyperparameter
       super$initialize(predictor)
+      checkmate::assert_integerish(max_feats_to_change, lower = 1L, upper = predictor$data$n.features)
       checkmate::assert_integerish(n_synth, lower = 1L)
       checkmate::assert_choice(importance_method, choices = c("fastshap", "icesd"))
+      private$max_feats_to_change = max_feats_to_change
       private$n_synth = n_synth
       private$importance_method = importance_method
     }
   ),
   
   private = list(
+    max_feats_to_change = NULL,
     n_synth = NULL,
     importance_method = NULL,
     run = function() {
@@ -26,7 +29,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
         if (!requireNamespace("fastshap", quietly = TRUE)) {
           stop("Package 'fastshap' needed for this measuring importance. Please install it.", call. = FALSE)
         }
-        shap = explain(private$predictor, X = private$predictor$data$get.x(), 
+        shap = fastshap::explain(private$predictor, X = private$predictor$data$get.x(), 
           pred_wrapper = pfun, newdata = private$x_interest,
           nsim = 1000)
         vim = abs(shap[1, ])
@@ -47,7 +50,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       x_interest = private$x_interest
       # TODO: which desired_prob to use when interval??
       x_interest[, yhat := mean(private$desired_prob)] 
-      cols = c("yhat", ordered_features[1:(length(ordered_features)-feats_to_change)])
+      cols = c("yhat", ordered_features[1:(length(ordered_features)-private$max_feats_to_change)])
       # TODO: Better to condition on yhat >= target_prob (already possible)
       fixed = x_interest[, ..cols]
       synth = forge(psi, n_synth = private$n_synth, evidence = fixed)
