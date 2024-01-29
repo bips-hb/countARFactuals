@@ -1,10 +1,6 @@
 library(ranger)
 # remotes::install_github("bips-hb/arf") # required for conditional sampling
-library(arf)
-library(data.table)
-library(iml)
-library(counterfactuals)
-source("CountARFactualClassif.R")
+load_all()
 set.seed(2024)
 
 data(german, package = "rchallenge")  
@@ -24,9 +20,11 @@ rf <- ranger(credit_risk ~ ., credit[-idx, ], probability = TRUE)
 predict(rf, x_interest)$prediction
 predictor = Predictor$new(model = rf, data = credit[-idx,], y = "credit_risk")
 
-cac = CountARFactualClassif$new(predictor = predictor, importance_method = "icesd")
+cac = CountARFactualClassif$new(predictor = predictor, 
+  max_feats_to_change = 2L, importance_method = "icesd", 
+  feature_selector = "importance")
 cfexp = cac$find_counterfactuals(
   x_interest, desired_class = "good", desired_prob = c(0.6, 1)
 )
-cfexp$evaluate()
+cfexp$evaluate_set()
 cfexp$plot_surface(c("duration", "amount"))
