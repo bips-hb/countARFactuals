@@ -64,9 +64,12 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     #' @param init_strategy (`character(1)`)\cr  
     #'   The population initialization strategy. Can be `icecurve` (default), `random`, `sd` or `traindata`. For more information,
     #'   see the `Details` section.
-    #' @param use_conditional_mutator (`logical(1)`)\cr 
-    #'   Should a conditional mutator be used? The conditional mutator generates plausible feature values based 
-    #'   on the values of the other feature. Default is `FALSE`.
+    #' @param conditional_mutator (`character(1)`)\cr 
+    #'   Whether and which conditional mutator should be used? The conditional mutator generates plausible feature values based 
+    #'   on the values of the other feature. Default is `NULL`, meaning that no conditional mutator is used. 
+    #'   Possible choices for a conditional mutator are `"arf_single"` and `"arf_multi"` (Watson et al. 2023), where a 
+    #'   adversarial random forest (arf) mutates either single values or multiple values at once, respectively.
+    #'   Another choice is `"cforest"` (Hothorn and Zeileis 2017), where a transformation forest is used to mutate single values.
     #' @param quiet (`logical(1)`)\cr 
     #'  Should information about the optimization status be hidden? Default is `FALSE`.
     #' @param distance_function (`function()` | `'gower'` | `'gower_c'`)\cr 
@@ -81,7 +84,8 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     initialize = function(predictor, epsilon = NULL, fixed_features = NULL, max_changed = NULL, mu = 20L, 
                           termination_crit = "gens", n_generations = 175L, p_rec = 0.71, p_rec_gen = 0.62, 
                           p_mut = 0.73, p_mut_gen = 0.5, p_mut_use_orig = 0.4, k = 1L, weights = NULL, 
-                          lower = NULL, upper = NULL, init_strategy = "icecurve", use_conditional_mutator = FALSE, 
+                          lower = NULL, upper = NULL, init_strategy = "icecurve",
+                          conditional_mutator = NULL,
                           quiet = FALSE, distance_function = "gower") {
       
       if (is.character(distance_function)) {
@@ -116,27 +120,36 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       assert_number(k, lower = 1, upper = nrow(private$predictor$data$X))
       assert_numeric(weights, any.missing = FALSE, len = k, null.ok = TRUE)
       assert_choice(init_strategy, choices = c("icecurve", "random", "sd", "traindata"))
-      assert_flag(use_conditional_mutator)
+      assert_choice(conditional_mutator, choices = c("arf_single", "arf_multi", "cforest"), null.ok = TRUE)
       assert_flag(quiet)
       
-      if (use_conditional_mutator) {
-        if (!requireNamespace("trtf", quietly = TRUE)) {
-          stop("Package 'trtf' needed for the conditional mutator to work. Please install it.", call. = FALSE)
-        }
-        if (!requireNamespace("partykit", quietly = TRUE)) {
-          stop("Package 'partykit' needed for this function to work. Please install it.", call. = FALSE)
-        }
-        if (!requireNamespace("basefun", quietly = TRUE)) {
-          stop("Package 'basefun' needed for this function to work. Please install it.", call. = FALSE)
-        }
+      if (!is.null(conditional_mutator)) {
         
-        nams_cs = names(predictor$data$X)
-        nams_cs = setdiff(nams_cs, fixed_features)
-        private$conditional_sampler = sapply(
-          nams_cs, function(fname) ConditionalSampler$new(predictor$data$X, fname),
-          simplify = FALSE, USE.NAMES = TRUE
-        )
-        names(private$conditional_sampler) = nams_cs
+        if (conditional_mutator == "cforest") {
+          if (!requireNamespace("trtf", quietly = TRUE)) {
+            stop("Package 'trtf' needed for the conditional mutator to work. Please install it.", call. = FALSE)
+          }
+          if (!requireNamespace("partykit", quietly = TRUE)) {
+            stop("Package 'partykit' needed for this function to work. Please install it.", call. = FALSE)
+          }
+          if (!requireNamespace("basefun", quietly = TRUE)) {
+            stop("Package 'basefun' needed for this function to work. Please install it.", call. = FALSE)
+          }
+          nams_cs = names(predictor$data$X)
+          nams_cs = setdiff(nams_cs, fixed_features)
+          private$conditional_sampler = sapply(
+            nams_cs, function(fname) ConditionalSampler$new(predictor$data$X, fname),
+            simplify = FALSE, USE.NAMES = TRUE
+          )
+          names(private$conditional_sampler) = nams_cs
+          class(private$conditional_sampler) = "cforest_sampler"
+          
+        } else if (grepl("arf", conditional_mutator)) {
+          if (!requireNamespace("arf", quietly = TRUE)) {
+            stop("Package 'arf' needed for this function to work. Please install it.", call. = FALSE)
+          }
+          private$conditional_sampler = paste(conditional_mutator, "sampler", sep = "_")
+        }
       }
 
       private$epsilon = epsilon
@@ -244,6 +257,15 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       pred_column = private$get_pred_column()
       y_hat_interest = private$predictor$predict(private$x_interest)[[pred_column]]
       private$ref_point = c(min(abs(y_hat_interest - private$desired_prob)), 1, ncol(private$x_interest), 1)
+      
+      if (inherits(private$conditional_sampler, "character")) {
+        nam = private$conditional_sampler
+        dat = copy(private$predictor$data$get.x())
+        dat[, yhat := private$predictor$predict(dat)[,private$desired_class]]
+        arf = adversarial_rf(dat, always.split.variables = "yhat")
+        private$conditional_sampler = forde(arf, dat)
+        class(private$conditional_sampler) = nam
+      }
       
       private$.optimizer = moc_algo(
         predictor = private$predictor,

@@ -67,9 +67,15 @@ moc_algo = function(predictor, x_interest, pred_column, target, param_set, lower
         p_mut_use_orig = p_mut_use_orig
       )
     } else {
+      x_interest_arf = copy(x_interest)
+      if (grepl("arf", class(cond_sampler))) {
+        # TODO: which desired_prob to use when interval??
+        # --> Currently mean
+        x_interest_arf[, yhat := mean(target)] 
+      } 
       op_m = make_moc_conditional_mutator(
         ps = param_set_flex, 
-        x_interest = x_interest,
+        x_interest = x_interest_arf,
         max_changed = max_changed, 
         p_mut = p_mut,
         p_mut_gen = p_mut_gen, 

@@ -1,5 +1,5 @@
 make_fitness_function = function(predictor, x_interest, pred_column, target, weights, k, fixed_features, param_set,
-                                 distance_function) {
+  distance_function) {
   
   function(xdt) {
     # Add values of fixed_features just for prediction
@@ -45,7 +45,7 @@ MutatorReset = R6::R6Class("MutatorReset", inherit = Mutator,
       assert_data_table(x_interest)
       assert_numeric(p_use_orig, lower = 0, upper = 1, len = 1L, any.missing = FALSE)
       assert_integerish(max_changed, lower = 0, len = 1L, any.missing = FALSE, null.ok = TRUE)
-
+      
       params = ps(
         max_changed = p_int(special_vals = list(NULL)),
         p_use_orig = p_dbl()
@@ -76,7 +76,7 @@ MutatorReset = R6::R6Class("MutatorReset", inherit = Mutator,
 # `max_changed` features are changed
 reset_columns = function(values, p_use_orig, max_changed, x_interest) {
   values_reset = copy(values)
-
+  
   # Removes fixed features from x_interest, if present, as only flex features are contained in values_reset
   x_interest_sub = x_interest[, names(values_reset), with = FALSE]
   
@@ -94,7 +94,7 @@ reset_columns = function(values, p_use_orig, max_changed, x_interest) {
     if (length(idx_reset) > 0L) {
       set(values_reset, i, j = idx_reset, value = x_interest_sub[, idx_reset, with = FALSE])
     }
-
+    
     # If more changes than allowed, randomly reset some features such that constraint holds
     n_changes = count_changes(values_reset[i, ], x_interest_sub)
     if (!is.null(max_changed)) {
@@ -127,7 +127,7 @@ ScalorNondomPenalized = R6::R6Class("ScalorNondomPenalized", inherit = Scalor,
   ),
   private = list(
     .scale = function(values, fitnesses) {
-
+      
       params = self$param_set$get_values()
       if (params$jitter) {
         fitnesses = fitnesses * (1 + runif(length(fitnesses)) * sqrt(.Machine$double.eps))
@@ -196,13 +196,13 @@ dist_crowding_custom = function(fitnesses, candidates) {
 
 make_moc_mutator = function(ps, x_interest, max_changed, sdevs, p_mut, p_mut_gen, p_mut_use_orig) {
   ops_list = list()
- 
+  
   ids_param_num = names(which(ps$is_number))
   for (id in ids_param_num) {
     ops_list[[id]] = mut("maybe", 
       mut("gauss", sdev = sdevs[[id]], truncated_normal = TRUE), mut("null"), p = p_mut_gen)
   }
-
+  
   if ("ParamFct" %in% ps$class) {
     idx_facts = which("ParamFct" == ps$class)
     mut_maybe_unif = mut("maybe", mut("unif", can_mutate_to_same = TRUE), mut("null"), p = p_mut_gen)
@@ -221,14 +221,14 @@ make_moc_mutator = function(ps, x_interest, max_changed, sdevs, p_mut, p_mut_gen
 
 
 make_moc_recombinator = function(ps, x_interest, max_changed, p_rec, p_rec_gen) {
-
+  
   ops_list = list()
   # If clauses are necessary to avoid warning that no corresponding dimensions
   if ("ParamDbl" %in% ps$class) {
     ops_list[["ParamDbl"]] = rec("maybe", rec("sbx"), 
       rec("null", n_indivs_in = 2L, n_indivs_out = 2L), p = p_rec_gen)
   }
-
+  
   if ("ParamInt" %in% ps$class) {
     # TODO: Change to sbx!!!
     ops_list[["ParamInt"]] = rec("maybe", rec("xounif"), 
@@ -247,7 +247,7 @@ make_moc_recombinator = function(ps, x_interest, max_changed, p_rec, p_rec_gen) 
 
 
 make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, flex_cols, sdevs, lower, upper, 
-                                    predictor, fitness_function, mu, p_use_orig = 0.5) {
+  predictor, fitness_function, mu, p_use_orig = 0.5) {
   function(param_set, n) {
     
     if (init_strategy == "random") {
@@ -270,7 +270,7 @@ make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, 
           upper_bounds = pmin(ps$upper[names(sdevs)], x_interest_num + sdevs)
           lower_bounds[names(lower)] = lower
           upper_bounds[names(upper)] = upper
-
+          
           param_set_init = make_param_set(X, lower = lower_bounds, upper = upper_bounds)
           function(ps, n) {
             mydesign = SamplerUnif$new(param_set_init)$sample(n)
@@ -278,7 +278,7 @@ make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, 
             mydesign
           }
         }
-
+        
         sdevs_flex_cols = sdevs[names(sdevs) %in% flex_cols]
         lower_flex_cols = lower[names(lower) %in% flex_cols]
         upper_flex_cols = upper[names(upper) %in% flex_cols]
@@ -288,12 +288,12 @@ make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, 
         )
       }
     } else if (init_strategy == "icecurve") {
-
+      
       make_f_design_ice = function(X, flex_cols, x_interest) {
         function(ps, n) {
           param_set = make_param_set(X, lower = NULL, upper = NULL)
           mydesign = SamplerUnif$new(param_set)$sample(n)
-
+          
           ice_sds = get_ICE_sd(x_interest, predictor, param_set)
           
           # p_min and p_max set to default values stated in MOC paper
@@ -301,14 +301,14 @@ make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, 
           p_max = 0.99
           p_differs = (ice_sds - min(ice_sds)) * (p_max - p_min) / 
             (max(ice_sds) - min(ice_sds) + sqrt(.Machine$double.eps)) + p_min
-
+          
           x_interest_sub = copy(x_interest)
           fixed_cols = which(!names(mydesign$data) %in% flex_cols)
           if (length(fixed_cols) > 0L) {
             mydesign$data[, (fixed_cols) := NULL]
             x_interest_sub = x_interest_sub[, flex_cols, with = FALSE]
           }
-
+          
           factor_cols = names(x_interest_sub)[sapply(x_interest_sub, is.factor)]
           if (length(factor_cols) > 0L) {
             x_interest_sub[, (factor_cols) := lapply(.SD, as.character), .SDcols = factor_cols]
@@ -322,13 +322,13 @@ make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, 
           mydesign
         }
       }
-
+      
       f_design = make_f_design_ice(predictor$data$X, flex_cols, x_interest)
     } else if (init_strategy == "traindata") {
       
       make_f_design_train = function(X, flex_cols, x_interest) {
         function(ps, n) {
-      
+          
           X_sub = predictor$data$X[sample.int(nrow(predictor$data$X), 200L, replace = TRUE)]
           for (rx in seq_len(nrow(X_sub))) {
             use_orig_feats = sample.int(ncol(x_interest), 1L) - 1
@@ -355,7 +355,7 @@ make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, 
       }
       f_design = make_f_design_train(predictor$data$X, flex_cols, x_interest)
     }
-
+    
     my_design = f_design(param_set, n)
     x_interest_reorderd = x_interest[, names(my_design$data), with = FALSE]
     
@@ -376,10 +376,10 @@ make_moc_pop_initializer = function(ps, x_interest, max_changed, init_strategy, 
         }
       }
     }
-
+    
     my_design
   }
-
+  
 }
 
 
@@ -421,7 +421,7 @@ make_moc_statistics_plots = function(archive, ref_point, normalize_objectives) {
     
     list(best_mean, best_min, hv)
   }) 
-
+  
   dt_agg_mean = rbindlist(lapply(ls_stats, "[[", 1L))
   dt_agg_min = rbindlist(lapply(ls_stats, "[[", 2L))
   dt_hv = rbindlist(lapply(ls_stats, "[[", 3L))
@@ -519,7 +519,12 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
     initialize = function(cond_sampler, x_interest, param_set, p_mut, p_mut_gen) {
       super$initialize()
       assert_class(param_set, "ParamSet")
-      assert_list(cond_sampler, len = length(param_set$ids()))
+      assert_list(cond_sampler)
+      if (inherits(cond_sampler, "cforest_sampler")) {
+        assert_list(cond_sampler,  len = length(param_set$ids()))
+      } else {
+        assert_true("yhat" %in% names(x_interest))
+      }
       private$x_interest = x_interest
       private$param_set = param_set
       private$cond_sampler = cond_sampler
@@ -536,16 +541,39 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
     
     .mutate = function(values) {
       flex_features = copy(names(values))
-      fixed_features = setdiff(names(private$x_interest), names(values))
+      fixed_features = setdiff(names(private$x_interest), c(names(values), "yhat"))
       if (length(fixed_features) > 0) {
         values[, (fixed_features) := x_interest[, fixed_features, with = FALSE]]
       }
       values_mutated = copy(values)
       for (i in seq_len(nrow(values))) {
         if (runif(1L) < private$p_mut) {
-          for (j in sample(flex_features)) {
-            if (runif(1L) < private$p_mut_gen) {
-              set(values_mutated, i, j, value = private$cond_sampler[[j]]$sample(values[i, ]))
+          if (inherits(private$cond_sampler, "arf_multi_sampler")) {
+           mutate_cols  = flex_features[runif(length(flex_features)) < private$p_mut_gen]
+           if (length(mutate_cols) >= 1) {
+             synth = data.table()
+             cols = setdiff(names(private$x_interest), mutate_cols)
+             print(cols)
+             fixed = private$x_interest[, ..cols]
+             synth = forge(private$cond_sampler, n_synth = 1, evidence = fixed)
+             for (j in mutate_cols) {
+              set(values_mutated, i, j, value = synth[[j]])
+             }
+           }
+          } else {
+            for (j in sample(flex_features)) {
+              if (runif(1L) < private$p_mut_gen) {
+                if (inherits(private$cond_sampler, "cforest_sampler")) {
+                  set(values_mutated, i, j, value = private$cond_sampler[[j]]$sample(values[i, ]))
+                } else if (inherits(private$cond_sampler, "arf_single_sampler")) {
+                  synth = data.table()
+                  cols = setdiff(names(private$x_interest), j)
+                  print(cols)
+                  fixed = private$x_interest[, ..cols]
+                  synth = forge(private$cond_sampler, n_synth = 1, evidence = fixed)
+                  set(values_mutated, i, j, value = synth[[j]])
+                }
+              }
             }
           }
         }
@@ -557,7 +585,7 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
         values_mutated
       }
     }
- )
+  )
 )
 
 
