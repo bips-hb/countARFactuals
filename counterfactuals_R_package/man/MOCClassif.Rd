@@ -139,7 +139,7 @@ Create a new \code{MOCClassif} object.
   lower = NULL,
   upper = NULL,
   init_strategy = "icecurve",
-  use_conditional_mutator = FALSE,
+  conditional_mutator = NULL,
   quiet = FALSE,
   distance_function = "gower"
 )}\if{html}{\out{</div>}}
@@ -210,9 +210,12 @@ If not \code{NULL}, it should be named with the corresponding feature names.}
 The population initialization strategy. Can be \code{icecurve} (default), \code{random}, \code{sd} or \code{traindata}. For more information,
 see the \code{Details} section.}
 
-\item{\code{use_conditional_mutator}}{(\code{logical(1)})\cr
-Should a conditional mutator be used? The conditional mutator generates plausible feature values based
-on the values of the other feature. Default is \code{FALSE}.}
+\item{\code{conditional_mutator}}{(\code{character(1)})\cr
+Whether and which conditional mutator should be used? The conditional mutator generates plausible feature values based
+on the values of the other feature. Default is \code{NULL}, meaning that no conditional mutator is used.
+Possible choices for a conditional mutator are \code{"arf_single"} and \code{"arf_multi"} (Watson et al. 2023), where a
+adversarial random forest (arf) mutates either single values or multiple values at once, respectively.
+Another choice is \code{"cforest"} (Hothorn and Zeileis 2017), where a transformation forest is used to mutate single values.}
 
 \item{\code{quiet}}{(\code{logical(1)})\cr
 Should information about the optimization status be hidden? Default is \code{FALSE}.}

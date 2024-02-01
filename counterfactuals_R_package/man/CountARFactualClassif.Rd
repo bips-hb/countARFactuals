@@ -60,11 +60,11 @@ Create a new \code{MOCClassif} object.
 \subsection{Usage}{
 \if{html}{\out{<div class="r">}}\preformatted{CountARFactualClassif$new(
   predictor,
-  max_feats_to_change = 1L,
+  max_feats_to_change = predictor$data$n.features,
   n_synth = 10L,
-  n_iterations = 10L,
+  n_iterations = 50L,
   feature_selector = "random_importance",
-  importance_method = "fastshap"
+  importance_method = "icesd"
 )}\if{html}{\out{</div>}}
 }
 
@@ -75,14 +75,14 @@ Create a new \code{MOCClassif} object.
 The object (created with \code{iml::Predictor$new()}) holding the machine learning model and the data.}
 
 \item{\code{max_feats_to_change}}{(\code{numeric(1)})\cr
-The maximum number of features allowed to be altered (default 1L).}
+The maximum number of features allowed to be altered (default number of features of \code{predictor$data}).}
 
 \item{\code{n_synth}}{(\code{numeric(1)}) \cr
 The number of samples drawn from the marginal distributions (default 10L).}
 
 \item{\code{n_iterations}}{(\code{numeric(1)}) \cr
 The number of iteration. In each iteration a new terminal node is chosen
-from which the \code{n_synth} candidates are drawn.}
+from which the \code{n_synth} candidates are drawn (default 50L).}
 
 \item{\code{feature_selector}}{(\code{character(1)})\cr
 The method to choose features that are fixed for a counterfactual and which
@@ -97,7 +97,7 @@ features that are not part of the conditioning set. All others are part.}
 \item{\code{importance_method}}{(\code{character(1)})\cr
 The local importance method to variables for the conditioning set.
 Ignored if \code{feature_selector = "random"}.
-Either "fastshap" based on the \code{fastshap} package (default) or "icesd"
+Either "fastshap" based on the \code{fastshap} package or "icesd" (default)
 based on the standard deviation of the ICE curve is possible.}
 }
 \if{html}{\out{</div>}}
