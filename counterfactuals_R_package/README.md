@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
@@ -185,7 +184,3 @@ cfactuals$plot_parallel()
 ```
 
 ![](man/figures/README-unnamed-chunk-11-1.png)<!-- -->
-=======
-# countARFactuals
-This repository contains the code for the countARFactuals paper.
->>>>>>> 5980f0744b1b16cfa497eba1c4da4852559dd6a0
