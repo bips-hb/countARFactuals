@@ -39,12 +39,12 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' @description Create a new `MOCClassif` object.
     #' @template predictor
     #' @param max_feats_to_change (`numeric(1)`)\cr  
-    #' The maximum number of features allowed to be altered (default 1L).
+    #' The maximum number of features allowed to be altered (default number of features of `predictor$data`).
     #' @param n_synth (`numeric(1)`) \cr 
     #' The number of samples drawn from the marginal distributions (default 10L).
     #' @param n_iterations (`numeric(1)`) \cr 
     #' The number of iteration. In each iteration a new terminal node is chosen 
-    #' from which the `n_synth` candidates are drawn.
+    #' from which the `n_synth` candidates are drawn (default 50L).
     #' @param feature_selector (`character(1)`)\cr
     #' The method to choose features that are fixed for a counterfactual and which 
     #' are part of the conditioning set when choosing tree paths. The default 
@@ -57,11 +57,11 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' @param importance_method (`character(1)`)\cr 
     #' The local importance method to variables for the conditioning set. 
     #' Ignored if `feature_selector = "random"`. 
-    #' Either "fastshap" based on the `fastshap` package (default) or "icesd" 
+    #' Either "fastshap" based on the `fastshap` package or "icesd" (default)
     #' based on the standard deviation of the ICE curve is possible.
     #' 
     #' @export
-    initialize = function(predictor, max_feats_to_change = 1L, n_synth = 10L, n_iterations = 10L, feature_selector = "random_importance", importance_method = "fastshap") { 
+    initialize = function(predictor, max_feats_to_change = predictor$data$n.features, n_synth = 10L, n_iterations = 50L, feature_selector = "random_importance", importance_method = "icesd") { 
       # TODO: add other hyperparameter
       super$initialize(predictor)
       checkmate::assert_integerish(max_feats_to_change, lower = 1L, upper = predictor$data$n.features)
