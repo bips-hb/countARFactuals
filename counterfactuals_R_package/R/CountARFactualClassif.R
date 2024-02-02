@@ -43,19 +43,19 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' @param n_synth (`numeric(1)`) \cr 
     #' The number of samples drawn from the marginal distributions (default 10L).
     #' @param n_iterations (`numeric(1)`) \cr 
-    #' The number of iteration. In each iteration a new terminal node is chosen 
+    #' The number of iterations. In each iteration a new terminal node is chosen 
     #' from which the `n_synth` candidates are drawn (default 50L).
     #' @param feature_selector (`character(1)`)\cr
-    #' The method to choose features that are fixed for a counterfactual and which 
-    #' are part of the conditioning set when choosing tree paths. The default 
+    #' The method to choose features that are fixed for a counterfactual (and thus 
+    #' part of the conditioning set when choosing tree paths). The default 
     #' `random_importance` means that the probability of being in the conditioning set 
-    #' is proportional to how unimportant a feature is. 
-    #' The strategy `importance` means that all features are chosen except for 
-    #' (or less than) the `max_feats_to_change` features that are most important. 
+    #' is proportional to how unimportant a feature is (unimportant features are more likely to be fixed). 
+    #' The strategy `importance` means that all features are fixed except for 
+    #' the up to `max_feats_to_change` most important features. 
     #' The strategy `random` randomly chooses up to `max_feats_to_change` 
     #' features that are not part of the conditioning set. All others are part.
     #' @param importance_method (`character(1)`)\cr 
-    #' The local importance method to variables for the conditioning set. 
+    #' The local importance method used to choose variables for the conditioning set. 
     #' Ignored if `feature_selector = "random"`. 
     #' Either "fastshap" based on the `fastshap` package or "icesd" (default)
     #' based on the standard deviation of the ICE curve is possible.
@@ -63,6 +63,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' @export
     initialize = function(predictor, max_feats_to_change = predictor$data$n.features, n_synth = 10L, n_iterations = 50L, feature_selector = "random_importance", importance_method = "icesd") { 
       # TODO: add other hyperparameter
+      # TODO: it would be cool if one could directly choose the number of samples to be drawn (question is how to deal with rounding problems)
       super$initialize(predictor)
       checkmate::assert_integerish(max_feats_to_change, lower = 1L, upper = predictor$data$n.features)
       checkmate::assert_integerish(n_synth, lower = 1L)
@@ -92,7 +93,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       psi = forde(arf, dat)
       
       # Conditional sampling
-      ##  Select conditioning set
+      ##  Select fixed variables/conditioning set
       if (grepl("importance", private$feature_selector)) {
         # Shapley values as local importance
         if (private$importance_method == "fastshap") {
