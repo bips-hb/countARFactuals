@@ -40,21 +40,21 @@ pages 5357–5375. PMLR.
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-CountARFactualClassif-new}{\code{CountARFactualClassif$new()}}
-\item \href{#method-CountARFactualClassif-clone}{\code{CountARFactualClassif$clone()}}
+\item \href{#method-new}{\code{CountARFactualClassif$new()}}
+\item \href{#method-clone}{\code{CountARFactualClassif$clone()}}
 }
 }
-\if{html}{\out{
-<details open><summary>Inherited methods</summary>
-<ul>
-<li><span class="pkg-link" data-pkg="counterfactuals" data-topic="CounterfactualMethod" data-id="print"><a href='../../counterfactuals/html/CounterfactualMethod.html#method-CounterfactualMethod-print'><code>counterfactuals::CounterfactualMethod$print()</code></a></span></li>
-<li><span class="pkg-link" data-pkg="counterfactuals" data-topic="CounterfactualMethodClassif" data-id="find_counterfactuals"><a href='../../counterfactuals/html/CounterfactualMethodClassif.html#method-CounterfactualMethodClassif-find_counterfactuals'><code>counterfactuals::CounterfactualMethodClassif$find_counterfactuals()</code></a></span></li>
-</ul>
-</details>
-}}
+\if{html}{
+\out{<details open ><summary>Inherited methods</summary>}
+\itemize{
+\item \out{<span class="pkg-link" data-pkg="counterfactuals" data-topic="CounterfactualMethod" data-id="print">}\href{../../counterfactuals/html/CounterfactualMethod.html#method-print}{\code{counterfactuals::CounterfactualMethod$print()}}\out{</span>}
+\item \out{<span class="pkg-link" data-pkg="counterfactuals" data-topic="CounterfactualMethodClassif" data-id="find_counterfactuals">}\href{../../counterfactuals/html/CounterfactualMethodClassif.html#method-find_counterfactuals}{\code{counterfactuals::CounterfactualMethodClassif$find_counterfactuals()}}\out{</span>}
+}
+\out{</details>}
+}
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CountARFactualClassif-new"></a>}}
-\if{latex}{\out{\hypertarget{method-CountARFactualClassif-new}{}}}
+\if{html}{\out{<a id="method-new"></a>}}
+\if{latex}{\out{\hypertarget{method-new}{}}}
 \subsection{Method \code{new()}}{
 Create a new \code{MOCClassif} object.
 \subsection{Usage}{
@@ -81,21 +81,21 @@ The maximum number of features allowed to be altered (default number of features
 The number of samples drawn from the marginal distributions (default 10L).}
 
 \item{\code{n_iterations}}{(\code{numeric(1)}) \cr
-The number of iteration. In each iteration a new terminal node is chosen
+The number of iterations. In each iteration a new terminal node is chosen
 from which the \code{n_synth} candidates are drawn (default 50L).}
 
 \item{\code{feature_selector}}{(\code{character(1)})\cr
-The method to choose features that are fixed for a counterfactual and which
-are part of the conditioning set when choosing tree paths. The default
+The method to choose features that are fixed for a counterfactual (and thus
+part of the conditioning set when choosing tree paths). The default
 \code{random_importance} means that the probability of being in the conditioning set
-is proportional to how unimportant a feature is.
-The strategy \code{importance} means that all features are chosen except for
-(or less than) the \code{max_feats_to_change} features that are most important.
+is proportional to how unimportant a feature is (unimportant features are more likely to be fixed).
+The strategy \code{importance} means that all features are fixed except for
+the up to \code{max_feats_to_change} most important features.
 The strategy \code{random} randomly chooses up to \code{max_feats_to_change}
 features that are not part of the conditioning set. All others are part.}
 
 \item{\code{importance_method}}{(\code{character(1)})\cr
-The local importance method to variables for the conditioning set.
+The local importance method used to choose variables for the conditioning set.
 Ignored if \code{feature_selector = "random"}.
 Either "fastshap" based on the \code{fastshap} package or "icesd" (default)
 based on the standard deviation of the ICE curve is possible.}
@@ -104,8 +104,8 @@ based on the standard deviation of the ICE curve is possible.}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-CountARFactualClassif-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-CountARFactualClassif-clone}{}}}
+\if{html}{\out{<a id="method-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{

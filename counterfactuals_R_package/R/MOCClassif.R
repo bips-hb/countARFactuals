@@ -69,7 +69,8 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     #'   on the values of the other feature. Default is `NULL`, meaning that no conditional mutator is used. 
     #'   Possible choices for a conditional mutator are `"arf_single"` and `"arf_multi"` (Watson et al. 2023), where a 
     #'   adversarial random forest (arf) mutates either single values or multiple values at once, respectively.
-    #'   Another choice is `"cforest"` (Hothorn and Zeileis 2017), where a transformation forest is used to mutate single values.
+    #'   Another choice is `"ctree"` (Hothorn and Zeileis 2017), where a (conditional) transformation tree 
+    #'   is used to mutate single values.
     #' @param quiet (`logical(1)`)\cr 
     #'  Should information about the optimization status be hidden? Default is `FALSE`.
     #' @param distance_function (`function()` | `'gower'` | `'gower_c'`)\cr 
@@ -120,12 +121,12 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       assert_number(k, lower = 1, upper = nrow(private$predictor$data$X))
       assert_numeric(weights, any.missing = FALSE, len = k, null.ok = TRUE)
       assert_choice(init_strategy, choices = c("icecurve", "random", "sd", "traindata"))
-      assert_choice(conditional_mutator, choices = c("arf_single", "arf_multi", "cforest"), null.ok = TRUE)
+      assert_choice(conditional_mutator, choices = c("arf_single", "arf_multi", "ctree"), null.ok = TRUE)
       assert_flag(quiet)
       
       if (!is.null(conditional_mutator)) {
         
-        if (conditional_mutator == "cforest") {
+        if (conditional_mutator == "ctree") {
           if (!requireNamespace("trtf", quietly = TRUE)) {
             stop("Package 'trtf' needed for the conditional mutator to work. Please install it.", call. = FALSE)
           }
@@ -142,7 +143,7 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
             simplify = FALSE, USE.NAMES = TRUE
           )
           names(private$conditional_sampler) = nams_cs
-          class(private$conditional_sampler) = "cforest_sampler"
+          class(private$conditional_sampler) = "ctree_sampler"
           
         } else if (grepl("arf", conditional_mutator)) {
           if (!requireNamespace("arf", quietly = TRUE)) {

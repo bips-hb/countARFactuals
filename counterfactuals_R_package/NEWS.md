@@ -1,3 +1,6 @@
+# counterfactuals 0.1.4
+* Added new method countARFactuals and new conditional mutator for MOCClassif and MOCRegr
+
 # counterfactuals 0.1.3
 * Resolved bug in `Counterfactuals$evaluate(show_diff = TRUE)` after `$subset_to_valid()` and `$revert_subset_to_valid()` were called.
 * Throw errors if `x_nn_correct = TRUE` but no correctly classified observation available. 

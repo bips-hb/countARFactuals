@@ -27,7 +27,7 @@ CounterfactualMethod = R6::R6Class("CounterfactualMethod",
       assert_function(distance_function, args = c("x", "y", "data"), ordered = TRUE, null.ok = TRUE)
       
       # If the task could not be derived from the model, then we infer it from the prediction of some training data
-      if (predictor$task == "unknown") {
+      if (is.null(predictor$task) || predictor$task == "unknown") {
         # Needs to be set to NULL, as the predictor does not infer the task from prediction otherwise
         # See: https://github.com/christophM/iml/blob/master/R/Predictor.R#L141 of commit 409838a.
         # The task is then checked by `CounterfactualMethodRegr` or `CounterfactualMethodClassif`

@@ -28,3 +28,12 @@ cfexp = cac$find_counterfactuals(
 )
 cfexp$evaluate_set()
 cfexp$plot_surface(c("duration", "amount"))
+
+
+for (cm in c("arf_single", "arf_multi", "ctree")) {
+  mocc = MOCClassif$new(predictor = predictor, conditional_mutator = cm)
+  cfexpmoc = mocc$find_counterfactuals(
+  x_interest, desired_class = "good", desired_prob = c(0.6, 1)
+)
+cfexp$evaluate_set()
+}

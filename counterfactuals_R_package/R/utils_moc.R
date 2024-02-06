@@ -520,7 +520,7 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
       super$initialize()
       assert_class(param_set, "ParamSet")
       assert_list(cond_sampler)
-      if (inherits(cond_sampler, "cforest_sampler")) {
+      if (inherits(cond_sampler, "ctree_sampler")) {
         assert_list(cond_sampler,  len = length(param_set$ids()))
       } else {
         assert_true("yhat" %in% names(x_interest))
@@ -563,7 +563,7 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
           } else {
             for (j in sample(flex_features)) {
               if (runif(1L) < private$p_mut_gen) {
-                if (inherits(private$cond_sampler, "cforest_sampler")) {
+                if (inherits(private$cond_sampler, "ctree_sampler")) {
                   set(values_mutated, i, j, value = private$cond_sampler[[j]]$sample(values[i, ]))
                 } else if (inherits(private$cond_sampler, "arf_single_sampler")) {
                   synth = data.table()

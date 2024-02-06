@@ -77,19 +77,29 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       private$importance_method = importance_method
     }
   ),
-  
+  active = list(
+    arf_iterations = function(value) {
+      if (missing(value)) {
+        private$.arf_iterations
+      } else {
+        stop("`$arf_iterations` is read only", call. = FALSE)
+      }
+    }
+  ),
   private = list(
     max_feats_to_change = NULL,
     n_synth = NULL,
     n_iterations = NULL,
     feature_selector = NULL,
     importance_method = NULL,
+    .arf_iterations = NULL,
     run = function() {
       
       # Fit ARF
       dat = copy(private$predictor$data$get.x())
       dat[, yhat := private$predictor$predict(dat)[,private$desired_class]]
       arf = adversarial_rf(dat, always.split.variables = "yhat")
+      private$.arf_iterations = length(arf$acc)
       psi = forde(arf, dat)
       
       # Conditional sampling
@@ -150,9 +160,9 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       synth[, yhat := NULL]
       
       # Recode factors to original factor levels
-      factor_cols = names(which(sapply(predictor$data$X, is.factor)))
+      factor_cols = names(which(sapply(private$predictor$data$X, is.factor)))
       for (factor_col in factor_cols) {
-        fact_col_pred = predictor$data$X[[factor_col]]
+        fact_col_pred = private$predictor$data$X[[factor_col]]
         value =  factor(synth[[factor_col]], levels = levels(fact_col_pred), 
           ordered = is.ordered(fact_col_pred))
         set(synth, j = factor_col, value = value)
