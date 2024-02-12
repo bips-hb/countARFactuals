@@ -44,12 +44,15 @@ x_interest[, credit_risk := NULL]
 x_interest[, yhat := target_prob] 
 cols <- c("yhat", ordered_features[1:(length(ordered_features)-feats_to_change)])
 fixed <- x_interest[, ..cols]
-synth <- forge(psi, 10, evidence = fixed)
+evidence <- arf:::prep_evi(psi, fixed)
+evidence[variable == "yhat", relation := ">="]
+synth <- forge(psi, 10, evidence = evidence)
 # TODO: Better to condition on yhat >= target_prob (already possible)
+
 
 # Keep only valid counterfactuals
 cfs <- synth[predict(rf, synth)$predictions[, "good"] >= target_prob, ]
-cfs[, yhat := NULL]
+#cfs[, yhat := NULL]
 
 # Show obs of interest and the counterfactuals
 x_interest
