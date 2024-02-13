@@ -169,8 +169,9 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       }
       
       # Keep only valid counterfactuals
-      cfs = synth[between(private$predictor$predict(synth)[,private$desired_class], 
-        private$desired_prob[1L], private$desired_prob[2L]),]
+      # cfs = synth[between(private$predictor$predict(synth)[,private$desired_class], 
+      #   private$desired_prob[1L], private$desired_prob[2L]),]
+      synth
     },
     
     print_parameters = function() {
