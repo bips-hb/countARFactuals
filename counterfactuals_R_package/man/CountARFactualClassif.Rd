@@ -37,24 +37,32 @@ pages 5357–5375. PMLR.
 \section{Super classes}{
 \code{\link[counterfactuals:CounterfactualMethod]{counterfactuals::CounterfactualMethod}} -> \code{\link[counterfactuals:CounterfactualMethodClassif]{counterfactuals::CounterfactualMethodClassif}} -> \code{CountARFactualClassif}
 }
+\section{Active bindings}{
+\if{html}{\out{<div class="r6-active-bindings">}}
+\describe{
+\item{\code{arf_iterations}}{(\code{numeric(1)})\cr
+The number of iterations for the arf to terminate.}
+}
+\if{html}{\out{</div>}}
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
-\item \href{#method-new}{\code{CountARFactualClassif$new()}}
-\item \href{#method-clone}{\code{CountARFactualClassif$clone()}}
+\item \href{#method-CountARFactualClassif-new}{\code{CountARFactualClassif$new()}}
+\item \href{#method-CountARFactualClassif-clone}{\code{CountARFactualClassif$clone()}}
 }
 }
-\if{html}{
-\out{<details open ><summary>Inherited methods</summary>}
-\itemize{
-\item \out{<span class="pkg-link" data-pkg="counterfactuals" data-topic="CounterfactualMethod" data-id="print">}\href{../../counterfactuals/html/CounterfactualMethod.html#method-print}{\code{counterfactuals::CounterfactualMethod$print()}}\out{</span>}
-\item \out{<span class="pkg-link" data-pkg="counterfactuals" data-topic="CounterfactualMethodClassif" data-id="find_counterfactuals">}\href{../../counterfactuals/html/CounterfactualMethodClassif.html#method-find_counterfactuals}{\code{counterfactuals::CounterfactualMethodClassif$find_counterfactuals()}}\out{</span>}
-}
-\out{</details>}
-}
+\if{html}{\out{
+<details open><summary>Inherited methods</summary>
+<ul>
+<li><span class="pkg-link" data-pkg="counterfactuals" data-topic="CounterfactualMethod" data-id="print"><a href='../../counterfactuals/html/CounterfactualMethod.html#method-CounterfactualMethod-print'><code>counterfactuals::CounterfactualMethod$print()</code></a></span></li>
+<li><span class="pkg-link" data-pkg="counterfactuals" data-topic="CounterfactualMethodClassif" data-id="find_counterfactuals"><a href='../../counterfactuals/html/CounterfactualMethodClassif.html#method-CounterfactualMethodClassif-find_counterfactuals'><code>counterfactuals::CounterfactualMethodClassif$find_counterfactuals()</code></a></span></li>
+</ul>
+</details>
+}}
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-new"></a>}}
-\if{latex}{\out{\hypertarget{method-new}{}}}
+\if{html}{\out{<a id="method-CountARFactualClassif-new"></a>}}
+\if{latex}{\out{\hypertarget{method-CountARFactualClassif-new}{}}}
 \subsection{Method \code{new()}}{
 Create a new \code{MOCClassif} object.
 \subsection{Usage}{
@@ -64,7 +72,8 @@ Create a new \code{MOCClassif} object.
   n_synth = 10L,
   n_iterations = 50L,
   feature_selector = "random_importance",
-  importance_method = "icesd"
+  importance_method = "icesd",
+  arf = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -99,13 +108,16 @@ The local importance method used to choose variables for the conditioning set.
 Ignored if \code{feature_selector = "random"}.
 Either "fastshap" based on the \code{fastshap} package or "icesd" (default)
 based on the standard deviation of the ICE curve is possible.}
+
+\item{\code{arf}}{(\code{ranger}) \cr
+Fitted arf. If NULL, arf is newly fitted.}
 }
 \if{html}{\out{</div>}}
 }
 }
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-clone"></a>}}
-\if{latex}{\out{\hypertarget{method-clone}{}}}
+\if{html}{\out{<a id="method-CountARFactualClassif-clone"></a>}}
+\if{latex}{\out{\hypertarget{method-CountARFactualClassif-clone}{}}}
 \subsection{Method \code{clone()}}{
 The objects of this class are cloneable with this method.
 \subsection{Usage}{
