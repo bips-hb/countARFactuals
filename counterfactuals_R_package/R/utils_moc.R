@@ -37,7 +37,7 @@ make_fitness_function = function(predictor, x_interest, pred_column, target, wei
       }
       
     } else if (plausibility_measure == "lik") {
-      dist_train = - lik(cond_sampler, xdt, arf = arf)
+      dist_train = exp(-lik(cond_sampler, xdt, arf = arf, log = FALSE))
     }
 
     data.table(cbind(dist_target, dist_x_interest, no_changed, dist_train))
