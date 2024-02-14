@@ -73,6 +73,8 @@ Create a new \code{MOCClassif} object.
   n_iterations = 50L,
   feature_selector = "random_importance",
   importance_method = "icesd",
+  node_selector = "coverage_proximity",
+  weight_node_selector = c(20, 20),
   arf = NULL
 )}\if{html}{\out{</div>}}
 }
@@ -108,6 +110,12 @@ The local importance method used to choose variables for the conditioning set.
 Ignored if \code{feature_selector = "random"}.
 Either "fastshap" based on the \code{fastshap} package or "icesd" (default)
 based on the standard deviation of the ICE curve is possible.}
+
+\item{\code{node_selector}}{(\code{character(1)})\cr
+How to select a node, based on "coverage" alone or on coverage and proximity ("coverage_proximity").}
+
+\item{\code{weight_node_selector}}{(\code{character(1)}) \cr
+How to weight coverage and proximity when \code{node_selector} is "coverage_proximity".}
 
 \item{\code{arf}}{(\code{ranger}) \cr
 Fitted arf. If NULL, arf is newly fitted.}
