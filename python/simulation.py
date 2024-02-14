@@ -213,7 +213,7 @@ values = dgp.sample()
 dgp.log_prob_node('x1')
 dgp.log_prob_node('x3')
 df_likelihood = dgp.log_prob(values, return_df=True)
-df_likelihood.to_csv('python/synthetic/bn_1.csv', index=False)
+# df_likelihood.to_csv('python/synthetic/bn_1.csv', index=False)
 
 print(df_likelihood.head())
 
