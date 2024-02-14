@@ -59,9 +59,11 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' Ignored if `feature_selector = "random"`. 
     #' Either "fastshap" based on the `fastshap` package or "icesd" (default)
     #' based on the standard deviation of the ICE curve is possible.
+    #' @param arf (`ranger`) \cr
+    #'   Fitted arf. If NULL, arf is newly fitted. 
     #' 
     #' @export
-    initialize = function(predictor, max_feats_to_change = predictor$data$n.features, n_synth = 10L, n_iterations = 50L, feature_selector = "random_importance", importance_method = "icesd") { 
+    initialize = function(predictor, max_feats_to_change = predictor$data$n.features, n_synth = 10L, n_iterations = 50L, feature_selector = "random_importance", importance_method = "icesd", arf = NULL) { 
       # TODO: add other hyperparameter
       # TODO: it would be cool if one could directly choose the number of samples to be drawn (question is how to deal with rounding problems)
       super$initialize(predictor)
@@ -69,15 +71,19 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       checkmate::assert_integerish(n_synth, lower = 1L)
       checkmate::assert_choice(feature_selector, choices = c("importance", "random", "random_importance"))
       checkmate::assert_choice(importance_method, choices = c("fastshap", "icesd"))
+      checkmate::assert_class(arf, "ranger", null.ok = TRUE)
       private$max_feats_to_change = max_feats_to_change
       private$feature_selector = feature_selector
       private$max_feats_to_change = max_feats_to_change
       private$n_synth = n_synth
       private$n_iterations = n_iterations
       private$importance_method = importance_method
+      private$arf = arf
     }
   ),
   active = list(
+    #' @field arf_iterations (`numeric(1)`)\cr
+    #' The number of iterations for the arf to terminate.
     arf_iterations = function(value) {
       if (missing(value)) {
         private$.arf_iterations
@@ -93,14 +99,17 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     feature_selector = NULL,
     importance_method = NULL,
     .arf_iterations = NULL,
+    arf = NULL,
     run = function() {
       
       # Fit ARF
       dat = copy(private$predictor$data$get.x())
       dat[, yhat := private$predictor$predict(dat)[,private$desired_class]]
-      arf = adversarial_rf(dat, always.split.variables = "yhat")
+      if (is.null(private$arf)) {
+        private$arf = adversarial_rf(dat, always.split.variables = "yhat")
+      }
       private$.arf_iterations = length(arf$acc)
-      psi = forde(arf, dat)
+      psi = forde(private$arf, dat)
       
       # Conditional sampling
       ##  Select fixed variables/conditioning set

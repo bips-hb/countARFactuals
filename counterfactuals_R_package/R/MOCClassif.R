@@ -71,8 +71,13 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     #'   adversarial random forest (arf) mutates either single values or multiple values at once, respectively.
     #'   Another choice is `"ctree"` (Hothorn and Zeileis 2017), where a (conditional) transformation tree 
     #'   is used to mutate single values.
-    #' @param quiet (`logical(1)`)\cr 
-    #'  Should information about the optimization status be hidden? Default is `FALSE`.
+    #' @param arf (`ranger`) \cr
+    #'   Fitted arf. If NULL, arf is newly fitted. 
+    #' @param plausibility_measure (`character(1)`) \cr
+    #' Which plausibility criterion should be used. Default is 'gower' which measures 
+    #' the distance to the nearest `k` training data points weighted by `weights`. 
+    #' Other option is 'lik' which measures the likelihood of a sample 
+    #' based on an arf see `arf::lik`. 
     #' @param distance_function (`function()` | `'gower'` | `'gower_c'`)\cr 
     #'  The distance function to be used in the second and fourth objective.
     #'  Either the name of an already implemented distance function
@@ -81,13 +86,15 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     #'  if set to 'gower_c', a C-based more efficient version of Gower's distance is used.
     #'  A function must have three arguments  `x`, `y`, and `data` and should
     #'  return a `double` matrix with `nrow(x)` rows and maximum `nrow(y)` columns.
+    #' @param quiet (`logical(1)`)\cr 
+    #'  Should information about the optimization status be hidden? Default is `FALSE`.
 
     initialize = function(predictor, epsilon = NULL, fixed_features = NULL, max_changed = NULL, mu = 20L, 
                           termination_crit = "gens", n_generations = 175L, p_rec = 0.71, p_rec_gen = 0.62, 
                           p_mut = 0.73, p_mut_gen = 0.5, p_mut_use_orig = 0.4, k = 1L, weights = NULL, 
                           lower = NULL, upper = NULL, init_strategy = "icecurve",
-                          conditional_mutator = NULL,
-                          quiet = FALSE, distance_function = "gower") {
+                          conditional_mutator = NULL, plausibility_measure = "gower", arf = NULL,
+                          distance_function = "gower", quiet = FALSE) {
       
       if (is.character(distance_function)) {
         if (distance_function == "gower") {
@@ -122,6 +129,8 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       assert_numeric(weights, any.missing = FALSE, len = k, null.ok = TRUE)
       assert_choice(init_strategy, choices = c("icecurve", "random", "sd", "traindata"))
       assert_choice(conditional_mutator, choices = c("arf_single", "arf_multi", "ctree"), null.ok = TRUE)
+      assert_choice(plausibility_measure, choices = c("gower", "lik"))
+      assert_class(arf, "ranger", null.ok = TRUE)
       assert_flag(quiet)
       
       if (!is.null(conditional_mutator)) {
@@ -173,6 +182,8 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       private$sdevs_num_feats = sdevs_num_feats
       private$lower = lower
       private$upper = upper
+      private$plausibility_measure = plausibility_measure
+      private$arf = arf
       private$quiet = quiet
     },
     
@@ -252,6 +263,8 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     ref_point = NULL,
     .optimizer = NULL,
     conditional_sampler = NULL,
+    plausibility_measure = NULL,
+    arf = NULL,
     quiet = NULL,
 
     run = function() {
@@ -263,8 +276,10 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
         nam = private$conditional_sampler
         dat = copy(private$predictor$data$get.x())
         dat[, yhat := private$predictor$predict(dat)[,private$desired_class]]
-        arf = adversarial_rf(dat, always.split.variables = "yhat")
-        private$conditional_sampler = forde(arf, dat)
+        if (is.null(private$arf)) {
+          private$arf = adversarial_rf(dat, always.split.variables = "yhat")
+        } 
+        private$conditional_sampler = forde(private$arf, dat)
         class(private$conditional_sampler) = nam
       }
       
@@ -293,6 +308,8 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
         init_strategy = private$init_strategy,
         distance_function = private$distance_function,
         cond_sampler = private$conditional_sampler,
+        plausibility_measure = private$plausibility_measure,
+        arf = private$arf,
         ref_point = private$ref_point,
         quiet = private$quiet
       )
@@ -317,6 +334,8 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       cat(" - p_rec_gen: ", private$p_rec_gen, "\n")
       cat(" - upper: ", private$upper)
       cat(" - weights: ", private$weights, "\n")
+      cat(" - conditional_mutator", private$conditional_sampler, "\n")
+      cat(" - plausibility_measure", private$plausibility_measure, "\n")
     }
   )
 )

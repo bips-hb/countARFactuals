@@ -94,11 +94,12 @@ Counterfactuals = R6::R6Class("Counterfactuals",
     #'  specifies the weight of the i-th closest data point.
     #'                                              
     #' @md
-    evaluate = function(measures = c("dist_x_interest", "dist_target", "no_changed", "dist_train", "minimality"), 
-      show_diff = FALSE, k = 1L, weights = NULL) {
+    evaluate = function(measures = c("dist_x_interest", "dist_target", "no_changed", "dist_train", "neg_lik", "minimality"), 
+      show_diff = FALSE, k = 1L, weights = NULL, arf = NULL) {
       
-      assert_names(measures, subset.of = c("dist_x_interest", "dist_target", "no_changed", "dist_train", "minimality"))
+      assert_names(measures, subset.of = c("dist_x_interest", "dist_target", "no_changed", "dist_train", "neg_lik", "minimality"))
       assert_flag(show_diff)
+      assert_class(arf, "ranger", null.ok = (!"neg_lik" %in% measures))
       assert_number(k, lower = 1, upper = nrow(private$predictor$data$X))
       assert_numeric(weights, any.missing = FALSE, len = k, null.ok = TRUE)
       assert_data_table(self$data, min.rows = 1L)
@@ -118,8 +119,15 @@ Counterfactuals = R6::R6Class("Counterfactuals",
       }
       
       if ("dist_train" %in% measures) {
-        dist_matrix = eval_distance(private$.distance_function, private$.data, private$predictor$data$X, private$predictor$data$X)
-        evals$dist_train = t(apply(dist_matrix, 1L, function(x) sort(x)))[, 1L]
+          dist_matrix = eval_distance(private$.distance_function, private$.data, private$predictor$data$X, private$predictor$data$X)
+          evals$dist_train = t(apply(dist_matrix, 1L, function(x) sort(x)))[, 1L]
+      }
+      
+      if ("neg_lik" %in% measures) {
+          dt = copy(private$predictor$data$X)
+          dt[, yhat := private$predictor$predict(dt)[private$get_pred_column()]]
+          cond_sampler = forde(arf, dt)
+          evals$neg_lik = exp(-lik(cond_sampler, private$.data, arf = arf, log = FALSE))
       }
       
       if ("dist_target" %in% measures) {
@@ -165,6 +173,7 @@ Counterfactuals = R6::R6Class("Counterfactuals",
         setorder(evals, dist_target)
       }
       
+      
       evals
     },
     #' @description 
@@ -186,9 +195,11 @@ Counterfactuals = R6::R6Class("Counterfactuals",
     #' (min distance between prediction of `x_interest` to `desired_prob/_outcome`, 
     #' 1, number of features, 1).
     #' 
-    evaluate_set = function(measures = c("diversity", "no_nondom", "frac_nondom", "hypervolume"), nadir = NULL) {
+    evaluate_set = function(measures = c("diversity", "no_nondom", "frac_nondom", "hypervolume"), plausbility_measure = "gower", nadir = NULL, arf = NULL) {
       assert_names(measures, subset.of = c("diversity", "no_nondom", "frac_nondom", "hypervolume"))
+      assert_class(arf, "ranger", null.ok = plausbility_measure != "lik")
       assert_numeric(nadir, min.len = 1L, max.len = 4L, null.ok = TRUE)
+    
       
       if (nrow(private$.data) <= 1) {
         message("number of counterfactuals <= 1, no evaluation of set could be conducted")
@@ -205,7 +216,13 @@ Counterfactuals = R6::R6Class("Counterfactuals",
       }
       
       if (any(c("no_nondom", "frac_nondom", "hypervolume") %in% measures)) {
-        res = self$evaluate()[, c("dist_target", "dist_x_interest", "no_changed", "dist_train")]
+        if (plausbility_measure == "gower") {
+          objectives = c("dist_target", "dist_x_interest", "no_changed", "dist_train")
+        } else if (plausbility_measure == "lik") {
+          objectives = c("dist_target", "dist_x_interest", "no_changed", "neg_lik")
+        }
+        
+        res = self$evaluate(objectives, arf = arf)[, objectives, with = FALSE]
         if (any(c("no_nondom", "frac_nondom") %in% measures)) {
           idnondom = miesmuschel::rank_nondominated(-as.matrix(res))$fronts == 1
           if ("no_nondom" %in% measures) evals$no_nondom = sum(idnondom)

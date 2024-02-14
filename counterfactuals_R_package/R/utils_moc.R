@@ -1,5 +1,5 @@
-make_fitness_function = function(predictor, x_interest, pred_column, target, weights, k, fixed_features, param_set,
-  distance_function) {
+make_fitness_function = function(predictor, x_interest, pred_column, target, weights, 
+  k, fixed_features, param_set, plausibility_measure, distance_function, cond_sampler, arf) {
   
   function(xdt) {
     # Add values of fixed_features just for prediction
@@ -21,17 +21,25 @@ make_fitness_function = function(predictor, x_interest, pred_column, target, wei
     dist_target = sapply(pred, function(x) ifelse(between(x, target[1L], target[2L]), 0, min(abs(x - target))))
     dist_x_interest = as.vector(eval_distance(distance_function, xdt, x_interest, predictor$data$X))
     no_changed = rowSums(xdt != x_interest[rep(seq_len(nrow(x_interest)), nrow(xdt)), ])
-    dist_train = eval_distance(distance_function, xdt, predictor$data$X, predictor$data$X)
-    # Subset the distance matrix w.r.t the k-nearest neighbors of each candidate
-    if (!"topn" %in% class(distance_function)) {
-      dist_train = t(apply(dist_train, 1L, function(x) sort(x)))
-      dist_train = dist_train[, seq_len(k), drop = FALSE]
+    
+    if (plausibility_measure == "gower") {
+      dist_train = eval_distance(distance_function, xdt, predictor$data$X, predictor$data$X)
+      
+      # Subset the distance matrix w.r.t the k-nearest neighbors of each candidate
+      if (!"topn" %in% class(distance_function)) {
+        dist_train = t(apply(dist_train, 1L, function(x) sort(x)))
+        dist_train = dist_train[, seq_len(k), drop = FALSE]
+      }
+      if (!is.null(weights)) {
+        dist_train = apply(dist_train, 1L, weighted.mean, w = weights)
+      } else {
+        dist_train = apply(dist_train, 1L, mean)
+      }
+      
+    } else if (plausibility_measure == "lik") {
+      dist_train = exp(-lik(cond_sampler, xdt, arf = arf, log = FALSE))
     }
-    if (!is.null(weights)) {
-      dist_train = apply(dist_train, 1L, weighted.mean, w = weights)
-    } else {
-      dist_train = apply(dist_train, 1L, mean)
-    }
+
     data.table(cbind(dist_target, dist_x_interest, no_changed, dist_train))
   }
 }
@@ -553,7 +561,6 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
            if (length(mutate_cols) >= 1) {
              synth = data.table()
              cols = setdiff(names(private$x_interest), mutate_cols)
-             print(cols)
              fixed = private$x_interest[, ..cols]
              synth = forge(private$cond_sampler, n_synth = 1, evidence = fixed)
              for (j in mutate_cols) {
@@ -568,7 +575,6 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
                 } else if (inherits(private$cond_sampler, "arf_single_sampler")) {
                   synth = data.table()
                   cols = setdiff(names(private$x_interest), j)
-                  print(cols)
                   fixed = private$x_interest[, ..cols]
                   synth = forge(private$cond_sampler, n_synth = 1, evidence = fixed)
                   set(values_mutated, i, j, value = synth[[j]])

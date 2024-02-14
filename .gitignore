@@ -1,13 +1,7 @@
-<<<<<<< HEAD
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
 inst/doc
-docs
 /doc/
 /Meta/
-=======
+
 # History files
 .Rhistory
 .Rapp.history
