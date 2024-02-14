@@ -123,7 +123,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       
       # Gower distances
       leaf_means <- dcast(psi$cnt[variable != "yhat", .(f_idx, variable, mu)], f_idx ~ variable, value.var = "mu")
-      leaf_dist <- data.table(f_idx = leaf_means$f_idx, dist = gower:::gower_dist(leaf_means, x_interest))
+      leaf_dist <- data.table(f_idx = leaf_means$f_idx, dist = gower:::gower_dist(leaf_means, private$x_interest))
       
       if (private$node_selector == "coverage_proximity") {
         # Use weighted combination of coverage and weights as new leaf weights

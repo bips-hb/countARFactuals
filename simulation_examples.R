@@ -16,7 +16,8 @@ registerDoMC(8)
 set.seed(1, "L'Ecuyer-CMRG")
 
 # Simulation function
-sim_fun = function(n_trn, dataset, method = "CountARF", nondom = FALSE, subset_valid = TRUE) {
+sim_fun = function(n_trn, dataset, method = "CountARF", nondom = FALSE, subset_valid = TRUE,  seed = 1234L) {
+  set.seed(seed)
   # Simulate data
   if (dataset == 'twomoons') {
     x = data.twomoons(n = n_trn/2, graph = FALSE)
@@ -32,7 +33,7 @@ sim_fun = function(n_trn, dataset, method = "CountARF", nondom = FALSE, subset_v
     x = data.frame(tmp$x, as.factor(tmp$classes))
     colnames(x) = c('X', 'Y', 'Class')
   }
-
+  
   # Randomly select a point of interes
   idx = sample(1:n_trn, size = 1L)
   x_interest = x[idx, ]
