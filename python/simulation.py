@@ -180,48 +180,49 @@ class DGP:
         return log_prob
 
 
-if __name__ == "__main__":
-    # generate graph 
-        
-    graph = nx.DiGraph()
-    graph.add_node('x1')
-    graph.add_node('x2')
-    graph.add_node('x3')
-    graph.add_node('x4')
-    graph.add_node('y')
 
-    graph.add_edge('x1', 'x3')
-    graph.add_edge('x2', 'x3')
-    graph.add_edge('x3', 'x4')
-    graph.add_edge('x1', 'x4')
-    graph.add_edge('x2', 'x4')
-    graph.add_edge('x4', 'y')
-    graph.add_edge('x2', 'y')
+# generate graph 
+    
+graph = nx.DiGraph()
+graph.add_node('x1')
+graph.add_node('x2')
+graph.add_node('x3')
+graph.add_node('x4')
+graph.add_node('y')
 
-    # specify the conditional distributions
+graph.add_edge('x1', 'x3')
+graph.add_edge('x2', 'x3')
+graph.add_edge('x3', 'x4')
+graph.add_edge('x1', 'x4')
+graph.add_edge('x2', 'x4')
+graph.add_edge('x4', 'y')
+graph.add_edge('x2', 'y')
 
-    dist_fncs = {}
-    dist_fncs['x1'] = lambda pv: dist.Binomial(probs=torch.tensor([0.7]))
-    dist_fncs['x2'] = lambda pv: dist.Normal(torch.tensor([0.0]), torch.tensor([1.0]))
-    dist_fncs['x3'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
-    dist_fncs['x4'] = lambda pv: dist.Normal(pv.sum(-1), 1.0)
-    dist_fncs['y'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
+# specify the conditional distributions
 
-    dgp = DGP(graph, dist_fncs, 1000)
-    values = dgp.sample()
+dist_fncs = {}
+dist_fncs['x1'] = lambda pv: dist.Binomial(probs=torch.tensor([0.7]))
+dist_fncs['x2'] = lambda pv: dist.Normal(torch.tensor([0.0]), torch.tensor([1.0]))
+dist_fncs['x3'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
+dist_fncs['x4'] = lambda pv: dist.Normal(pv.sum(-1), 1.0)
+dist_fncs['y'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
 
-    dgp.log_prob_node('x1')
-    dgp.log_prob_node('x3')
-    df_likelihood = dgp.log_prob(values, return_df=True)
+dgp = DGP(graph, dist_fncs, 1000)
+values = dgp.sample()
 
-    print(df_likelihood.head())
+dgp.log_prob_node('x1')
+dgp.log_prob_node('x3')
+df_likelihood = dgp.log_prob(values, return_df=True)
+df_likelihood.to_csv('python/synthetic/bn_1.csv', index=False)
 
-    # import seaborn as sns
-    import matplotlib.pyplot as plt
+print(df_likelihood.head())
 
-    # sns.pairplot(df_likelihood, vars=['x1', 'x2', 'x3', 'x4'], hue='y')
-    # plt.show()
+# import seaborn as sns
+import matplotlib.pyplot as plt
 
-    graph = DGP.generate_graph(20, 0.8)
-    nx.draw(graph, with_labels=True)
-    plt.show()
+# sns.pairplot(df_likelihood, vars=['x1', 'x2', 'x3', 'x4'], hue='y')
+# plt.show()
+
+graph = DGP.generate_graph(20, 0.5)
+nx.draw(graph, with_labels=True)
+plt.show()

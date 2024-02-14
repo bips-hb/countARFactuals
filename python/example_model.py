@@ -16,11 +16,14 @@ def model_pawelczyk():
 
 gmm, f = model_pawelczyk()
 data = gmm.sample((1000,)).numpy()
-y = f(data)
-plt.scatter(data[:,0], data[:,1], c=y)
+gmm.log_prob(torch.tensor(data))
+data = pd.DataFrame(data, columns=['x1', 'x2'])
+data['y'] = f(data.to_numpy())
+data.to_csv('pawelczyk.csv', index=False)
+plt.scatter(data['x1'], data['x2'], c=data['y'])
 plt.colorbar()  # Add color scale/legend
 plt.show()
-gmm.log_prob(torch.tensor(data))
+
 
 class DGP:
     def __init__(self):
@@ -62,6 +65,7 @@ class TwoSines(DGP):
 
 tm = TwoSines()
 data = tm.generate_data(1000)
+data.to_csv('two_sines.csv', index=False)
 likelihood = tm.get_log_likelihood(data)
 
 plt.scatter(data['x1'], data['x2'], c=data['y'])
@@ -145,7 +149,8 @@ class Cassini(DGP):
         logs_probss = torch.stack(logs_probss)
         return torch.logsumexp(logs_probss, 0).numpy()
 
-data = Cassini().generate_data(1000)
+data = Cassini().generate_data(10000)
+data.to_csv('cassini.csv', index=False)
 plt.scatter(data['x1'], data['x2'], c=data['y'])
 plt.show()
 
@@ -158,6 +163,8 @@ plt.scatter(x1, x2, c=likelihood)
 plt.colorbar()  # Add color scale/legend
 plt.show()
 
+
+## still need to implement the log likelihood function
 
 class Shapes(DGP):
     def __init__(self):
