@@ -34,19 +34,33 @@ get_data_model_python = function(datanam, x_interest_ids, model_paras) {
   )
   
   params <- list(
-    max_depth = 3
+    max_depth = 3, 
+    obj = "multi:softmax"
+  )
+
+  num_class = length(unique(dt$y))
+  params = list(
+    booster="gbtree",
+    eta=0.001,
+    max_depth=5,
+    gamma=3,
+    subsample=0.75,
+    colsample_bytree=1,
+    objective="multi:softprob",
+    eval_metric="mlogloss",
+    num_class=num_class
   )
   
   xgbmodel <- xgboost::xgb.train(
-    params = list(),
+    params = params,
     dtrain,
     nrounds = 10
   )
   
   # save infos
   xgboost::xgb.save(xgbmodel, file.path("python/synthetic/xgboost_paras", paste0(datanam, ".model")))
-  write.csv(x_interest, file = file.path("python/synthetic/x_interests", paste0(datanam, ".csv")))
-  write.csv(dt, file = file.path("python/synthetic/data/", paste0(datanam, ".csv")))
+  write.csv(x_interest, file = file.path("python/synthetic/x_interests", paste0(datanam, ".csv")), row.names = FALSE)
+  write.csv(dt, file = file.path("python/synthetic/data/", paste0(datanam, ".csv")), row.names = FALSE)
   
   
   # test if model works with x_interest
@@ -66,7 +80,7 @@ get_data_model_python = function(datanam, x_interest_ids, model_paras) {
 
 predict.xgboost = function(object, newdata){
   newData_x = xgb.DMatrix(data.matrix(newdata), missing = NA)
-  results = predict(object, newData_x)
+  results = predict(object, newData_x, reshape = TRUE)
   return(results)
 }
 
