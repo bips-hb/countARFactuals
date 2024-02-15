@@ -92,6 +92,8 @@ Counterfactuals = R6::R6Class("Counterfactuals",
     #'  How should the `k` nearest training points be weighted when computing the `dist_train` measure? If `NULL`
     #'  (default) then all `k` points are weighted equally. If a numeric vector of length `k` is given, the i-th element
     #'  specifies the weight of the i-th closest data point.
+    #' @param arf (`ranger`) \cr
+    #'   Fitted arf. If NULL, arf is newly fitted.
     #'                                              
     #' @md
     evaluate = function(measures = c("dist_x_interest", "dist_target", "no_changed", "dist_train", "neg_lik", "minimality"), 
@@ -187,6 +189,11 @@ Counterfactuals = R6::R6Class("Counterfactuals",
     #'   * `frac_nondom`: Fraction of counterfactuals that are not dominated by
     #'   other counterfactuals  
     #'   * `hypervolume`: Hypervolume of the induced Pareto front
+    #' @param plausibility_measure (`character(1)`) \cr
+    #'  Which plausibility criterion should be used. Default is 'gower' which measures 
+    #'  the distance to the nearest training data point. 
+    #'  Other option is 'lik' which measures the likelihood of a sample 
+    #'  based on an arf see `arf::lik`. 
     #' @param nadir (`numeric`) \cr Max objective values to calculate dominated hypervolume. 
     #' Only considered, if `hypervolume` is one of the `measures`.
     #' May be a scalar, in which case it is used for all four objectives, 
@@ -194,10 +201,12 @@ Counterfactuals = R6::R6Class("Counterfactuals",
     #' Default is NULL, meaning the nadir point by Dandl et al. (2020) is used: 
     #' (min distance between prediction of `x_interest` to `desired_prob/_outcome`, 
     #' 1, number of features, 1).
+    #' @param arf (`ranger`) \cr
+    #'   Fitted arf. If NULL, arf is newly fitted.
     #' 
-    evaluate_set = function(measures = c("diversity", "no_nondom", "frac_nondom", "hypervolume"), plausbility_measure = "gower", nadir = NULL, arf = NULL) {
+    evaluate_set = function(measures = c("diversity", "no_nondom", "frac_nondom", "hypervolume"), plausibility_measure = "gower", nadir = NULL, arf = NULL) {
       assert_names(measures, subset.of = c("diversity", "no_nondom", "frac_nondom", "hypervolume"))
-      assert_class(arf, "ranger", null.ok = plausbility_measure != "lik")
+      assert_class(arf, "ranger", null.ok = plausibility_measure != "lik")
       assert_numeric(nadir, min.len = 1L, max.len = 4L, null.ok = TRUE)
     
       
@@ -216,9 +225,9 @@ Counterfactuals = R6::R6Class("Counterfactuals",
       }
       
       if (any(c("no_nondom", "frac_nondom", "hypervolume") %in% measures)) {
-        if (plausbility_measure == "gower") {
+        if (plausibility_measure == "gower") {
           objectives = c("dist_target", "dist_x_interest", "no_changed", "dist_train")
-        } else if (plausbility_measure == "lik") {
+        } else if (plausibility_measure == "lik") {
           objectives = c("dist_target", "dist_x_interest", "no_changed", "neg_lik")
         }
         

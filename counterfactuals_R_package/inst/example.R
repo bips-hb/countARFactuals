@@ -1,6 +1,8 @@
 library("randomForest")
-
-
+library("data.table")
+library("devtools")
+library("arf")
+load_all()
 
 data(iris, package = "datasets")
 x_interest = iris[150L, ]
@@ -15,7 +17,7 @@ predictor$predict(x_interest)
 dat = as.data.table(dat)
 
 # Fit an ARF
-library("arf")
+
 dat[, Species := NULL]
 dat[, yhat := predictor$predict(dat)[,"virginica"]]
 
@@ -23,14 +25,11 @@ frst = adversarial_rf(dat, always.split.variables = "yhat")
 fd = forde(frst, dat)
 
 # Find counterfactuals for x_interest
-load_all()
-
 moc_classif = MOCClassif$new(predictor, n_generations = 15L, 
   quiet = TRUE, conditional_mutator = "arf_multi", plausibility_measure = "lik", 
   arf = frst)
 
-set.seed(1234L)
-set.seed(1234567L)
+set.seed(123456L)
 cfactuals = moc_classif$find_counterfactuals(
   x_interest = x_interest, desired_class = "virginica", desired_prob = c(0, 0.5)
 )
@@ -45,15 +44,32 @@ moc_classif$plot_statistics()
 
 
 # ARF 
-arf_classif = CountARFactualClassif$new(predictor, arf = frst)
+load_all()
+arf_classif = CountARFactualClassif$new(predictor, arf = frst,weight_node_selector = c(20, 20))
 
 cfactuals = arf_classif$find_counterfactuals(
   x_interest = iris[150L, ], desired_class = "virginica", desired_prob = c(0, .5)
 )
-# Print the counterfactuals
-cfactuals$data
-# Plot evolution of hypervolume and mean and minimum objective values
-cfactuals$evaluate_set(plausbility_measure = "lik", arf = frst)
-cfactuals$plot_parallel()
 
+arf_classif = CountARFactualClassif$new(predictor, arf = frst, node_selector = "coverage")
+
+cfactuals2 = arf_classif$find_counterfactuals(
+  x_interest = iris[150L, ], desired_class = "virginica", desired_prob = c(0, .5)
+)
+
+cfactuals$subset_to_valid()
+cfactuals2$subset_to_valid()
+
+cfactuals$evaluate_set(plausibility_measure = "lik", arf = frst)
+cfactuals2$evaluate_set(plausibility_measure = "lik", arf = frst)
+
+colMeans(cfactuals$evaluate(arf = frst))
+colMeans(cfactuals2$evaluate(arf = frst))
+
+cfactuals$plot_surface(feature_names = c("Petal.Width", "Petal.Length"))
+cfactuals2$plot_surface(feature_names = c("Petal.Width", "Petal.Length"))
+
+
+cfactuals$plot_parallel()
+cfactuals2$plot_parallel()
 

@@ -59,13 +59,19 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' Ignored if `feature_selector = "random"`. 
     #' Either "fastshap" based on the `fastshap` package or "icesd" (default)
     #' based on the standard deviation of the ICE curve is possible.
+    #' @param node_selector (`character(1)`)\cr
+    #' How to select a node, based on "coverage" alone or on coverage and proximity ("coverage_proximity").
+    #' @param weight_node_selector (`character(1)`) \cr
+    #' How to weight coverage and proximity when `node_selector` is "coverage_proximity".
     #' @param arf (`ranger`) \cr
     #'   Fitted arf. If NULL, arf is newly fitted. 
     #' 
     #' @export
-    initialize = function(predictor, max_feats_to_change = predictor$data$n.features, n_synth = 10L, n_iterations = 50L, feature_selector = "random_importance", importance_method = "icesd", arf = NULL) { 
+    initialize = function(predictor, max_feats_to_change = predictor$data$n.features, 
+      n_synth = 10L, n_iterations = 50L, feature_selector = "random_importance", 
+      importance_method = "icesd", node_selector = "coverage_proximity", 
+      weight_node_selector = c(20, 20), arf = NULL) { 
       # TODO: add other hyperparameter
-      # TODO: it would be cool if one could directly choose the number of samples to be drawn (question is how to deal with rounding problems)
       super$initialize(predictor)
       checkmate::assert_integerish(max_feats_to_change, lower = 1L, upper = predictor$data$n.features)
       checkmate::assert_integerish(n_synth, lower = 1L)
@@ -79,6 +85,8 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       private$n_iterations = n_iterations
       private$importance_method = importance_method
       private$arf = arf
+      private$node_selector = node_selector
+      private$weight_node_selector = weight_node_selector
     }
   ),
   active = list(
@@ -100,6 +108,8 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     importance_method = NULL,
     .arf_iterations = NULL,
     arf = NULL,
+    node_selector = NULL,
+    weight_node_selector = NULL,
     run = function() {
       
       # Fit ARF
@@ -108,8 +118,21 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       if (is.null(private$arf)) {
         private$arf = adversarial_rf(dat, always.split.variables = "yhat")
       }
-      private$.arf_iterations = length(arf$acc)
+      private$.arf_iterations = length(private$arf$acc)
       psi = forde(private$arf, dat)
+      
+      # Gower distances
+      leaf_means <- dcast(psi$cnt[variable != "yhat", .(f_idx, variable, mu)], f_idx ~ variable, value.var = "mu")
+      leaf_dist <- data.table(f_idx = leaf_means$f_idx, dist = gower:::gower_dist(leaf_means, private$x_interest))
+      
+      if (private$node_selector == "coverage_proximity") {
+        # Use weighted combination of coverage and weights as new leaf weights
+        psi$forest <- merge(psi$forest, leaf_dist, by = "f_idx")
+        weight_cvg = private$weight_node_selector[1]
+        weight_dist = private$weight_node_selector[2]
+        psi$forest[, cvg := exp(weight_cvg*cvg-weight_dist*dist)]
+        psi$forest[, dist := NULL]
+      }
       
       # Conditional sampling
       ##  Select fixed variables/conditioning set
@@ -133,10 +156,6 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
         }
       }
       
-      x_interest = private$x_interest
-      # TODO: which desired_prob to use when interval??
-      # --> Currently mean
-      x_interest[, yhat := mean(private$desired_prob)] 
       synth = data.table()
       for (i in 1:private$n_iterations) {
         feats_not_to_change = sample(seq(
@@ -148,11 +167,9 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
           cols = ordered_features[1:feats_not_to_change]
         } else if (private$feature_selector == "random_importance") {
           #bassert_true(all(names(vim) == private$predictor$data$feature.names))
-          # get probabilities
-          p_min = 0.01
-          p_max = 0.99
-          p_selected = 1 - ((vim - min(vim)) * (p_max - p_min) / 
-              (max(vim) - min(vim) + sqrt(.Machine$double.eps)) + p_min)
+          # get probabilities using softmax
+          softmax = function(x) exp(x)/sum(exp(x))
+          p_selected = softmax(-vim)
           cols = sample(private$predictor$data$feature.names, 
             size = feats_not_to_change,
             prob = p_selected)
@@ -160,12 +177,17 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
           cols = sample(private$predictor$data$feature.names, 
             size = feats_not_to_change)
         }
-        cols = c("yhat", cols)
-        # TODO: Better to condition on yhat >= target_prob (already possible)
-        fixed = x_interest[, ..cols]
-        synth = rbind(synth, forge(psi, n_synth = private$n_synth, evidence = fixed))
+        fixed = private$x_interest[, ..cols]
+        if (feats_not_to_change > 0) {
+         evidence = arf:::prep_evi(psi, fixed)
+        } else {
+          evidence = NULL
+        }
+        evidence = rbind(evidence, data.table(variable = "yhat", 
+          value = c(min(private$desired_prob), max(private$desired_prob)), 
+          relation = c(">=", "<=")))
+        synth = rbind(synth, forge(psi, n_synth = private$n_synth, evidence = evidence))
       }
-      x_interest[, yhat:= NULL]
       synth[, yhat := NULL]
       
       # Recode factors to original factor levels
@@ -184,7 +206,13 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     },
     
     print_parameters = function() {
-      #TODO
+      cat(" - max_feats_to_change: ", private$max_feats_to_change, "\n")
+      cat(" - n_synth: ", private$n_synth, "\n")
+      cat(" - n_iterations: ", private$n_iterations, "\n")
+      cat(" - feature_selector: ", private$feature_selector, "\n")
+      cat(" - importance_method: ", private$importance_method, "\n")
+      cat(" - node_selector: ", private$node_selector, "\n")
+      cat(" - weight_node_selector: ", private$weight_node_selector, "\n")
     }
   )
 )
