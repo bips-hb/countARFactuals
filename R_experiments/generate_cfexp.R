@@ -8,8 +8,8 @@ library(xgboost)
 library(ggplot2)
 library(ranger)
 library(ggsci)
-library(doMC)
-registerDoMC(8)
+library(doParallel)
+registerDoParallel(8L)
 set.seed(1, "L'Ecuyer-CMRG")
 
 
@@ -75,8 +75,8 @@ if (FALSE) {
 
 # Execute in parallel
 dsets = c("pawelczyk", "cassini", "two_sines")
-df_arf = foreach(d = dsets, .combine = rbind) %dopar% generate_cfexp(d, x_interest_id = 1L, method = "CountARF")
-df_moc = foreach(d = dsets, idx = 1:10, .combine = rbind) %dopar% generate_cfexp(d, idx, method = "MOC")
+df_arf = foreach(d = dsets, .combine = rbind) %dopar% generate_cfexp(d, 1L, method = "CountARF")
+df_moc = foreach(d = dsets, .combine = rbind) %dopar% generate_cfexp(d, 1L, method = "MOC")
 
 
 # Set scales free but fix x-axis ticks
@@ -85,7 +85,7 @@ df[Data == "Train", Data := paste0("Train_", y)]
 
 
 # Scatter plot
-ggplot(df, aes(x = X, y = Y, color = Data)) + 
+ggplot(df, aes(x = x1, y = x2, color = Data)) + 
   geom_point(alpha = 0.75) + 
   scale_color_ordinal() + 
   facet_grid(Method ~ Dataset) + 
