@@ -207,15 +207,17 @@ dist_fncs['x3'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
 dist_fncs['x4'] = lambda pv: dist.Normal(pv.sum(-1), 1.0)
 dist_fncs['y'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
 
-dgp = DGP(graph, dist_fncs, 1000)
-values = dgp.sample()
+dgp = DGP(graph, dist_fncs, 10000)
+values = dgp.sample() # returns torch tensor
+values = dgp.get_values() # returns data frame
+values.to_csv('python/synthetic/bn_1.csv',)
 
-dgp.log_prob_node('x1')
-dgp.log_prob_node('x3')
-df_likelihood = dgp.log_prob(values, return_df=True)
+# dgp.log_prob_node('x1')
+# dgp.log_prob_node('x3')
+# df_likelihood = dgp.log_prob(values, return_df=True)
 # df_likelihood.to_csv('python/synthetic/bn_1.csv', index=False)
 
-print(df_likelihood.head())
+# print(df_likelihood.head())
 
 # import seaborn as sns
 import matplotlib.pyplot as plt
