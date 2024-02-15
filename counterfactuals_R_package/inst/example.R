@@ -2,7 +2,7 @@ library("randomForest")
 library("data.table")
 library("devtools")
 library("arf")
-load_all()
+load_all("")
 
 data(iris, package = "datasets")
 x_interest = iris[150L, ]
@@ -34,7 +34,7 @@ cfactuals = moc_classif$find_counterfactuals(
   x_interest = x_interest, desired_class = "virginica", desired_prob = c(0, 0.5)
 )
 
-cfactuals$evaluate_set(plausbility_measure = "lik", arf = frst)
+cfactuals$evaluate_set(plausibility_measure = "lik", arf = frst)
 
 # Print the counterfactuals
 cfactuals$data
