@@ -5,14 +5,18 @@ from sklearn.model_selection import GridSearchCV
 import scipy.stats as stats
 
 
-data_name = 'bn_1'
+data_name = 'two_sines'
 loadpath = 'python/synthetic/'
 train_size = 5000
 x_interest_size = 50
 
-df = pd.read_csv(loadpath + '{}.csv'.format(data_name), index_col=0)
+if data_name == 'bn_1':
+    df = pd.read_csv(loadpath + '{}.csv'.format(data_name), index_col=0)
+else:
+    df = pd.read_csv(loadpath + '{}.csv'.format(data_name))
+
 # Convert columns to integer if possible
-df = df.apply(pd.to_numeric, errors='ignore')
+df['y'] = (df['y'] >= 1).astype(int)
 
 assert df.shape[0] >= train_size + x_interest_size
 
@@ -20,7 +24,8 @@ assert df.shape[0] >= train_size + x_interest_size
 
 df_train = df.iloc[:train_size]
 df_rest = df.iloc[train_size:]
-df_interest = df_rest.sample(x_interest_size)
+df_rest_filtered = df_rest[df_rest['y'] == 0]
+df_interest = df_rest_filtered.sample(x_interest_size)
 
 X_train, y_train = df_train.drop('y', axis=1), df_train['y']
 X_rest, y_rest = df_rest.drop('y', axis=1), df_rest['y']

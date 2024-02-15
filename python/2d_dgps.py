@@ -15,7 +15,7 @@ def model_pawelczyk():
     return gmm, f
 
 gmm, f = model_pawelczyk()
-data = gmm.sample((1000,)).numpy()
+data = gmm.sample((10000,)).numpy()
 gmm.log_prob(torch.tensor(data))
 data = pd.DataFrame(data, columns=['x1', 'x2'])
 data['y'] = f(data.to_numpy())
@@ -64,7 +64,7 @@ class TwoSines(DGP):
         return torch.logsumexp(log_probss, 0).numpy()
 
 tm = TwoSines()
-data = tm.generate_data(1000)
+data = tm.generate_data(10000)
 data.to_csv('two_sines.csv', index=False)
 likelihood = tm.get_log_likelihood(data)
 
