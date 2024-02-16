@@ -5,7 +5,7 @@ library(patchwork)
 
 set.seed(42)
 
-task_ids = 1:6 #1:13
+task_ids = 1:13 #1:13
 weight_coverage = c(0, 1, 5, 20)
 weight_proximity = c(0, 1, 5, 20)
 
@@ -91,11 +91,11 @@ algo_design = list(
                               node_selector = "coverage"))
 )
 
-addExperiments(prob_design, algo_design, repls = 5)
+addExperiments(prob_design, algo_design, repls = 50)
 summarizeExperiments()
 
 # Test jobs -----------------------------------------------------------
-testJob(id = 1)
+#testJob(id = 1)
 
 # Submit -----------------------------------------------------------
 submitJobs()
@@ -103,9 +103,7 @@ waitForJobs()
 
 # Get results -------------------------------------------------------------
 res =  flatten(ijoin(reduceResultsDataTable(), getJobPars()))
-#res
 
-# Plot results -------------------------------------------------------------
 res[, method := paste(node_selector, weight_coverage, weight_proximity)]
 res[, dataset := i]
 
@@ -115,15 +113,44 @@ cols <- c("diversity", "no_nondom",
           "neg_lik_nondom")
 res_mean <- res[, lapply(.SD, mean), .SDcols = cols, by = .(method, dataset)]
 
+saveRDS(res, "res.Rds")
+saveRDS(res_mean, "res_mean.Rds")
+
+# Plot results -------------------------------------------------------------
+res_mean <- readRDS("res_mean.Rds")
+
 # Likelihood
-p1 = ggplot(res_mean, aes(x = method, y = neg_lik_all)) +
+p1 = ggplot(res_mean, aes(x = method, y = log(neg_lik_all))) +
   geom_boxplot() + 
   theme_bw() + 
   coord_flip()
-p2 = ggplot(res_mean, aes(x = method, y = neg_lik_nondom)) +
+p2 = ggplot(res_mean, aes(x = method, y = log(neg_lik_nondom))) +
   geom_boxplot() + 
   theme_bw() + 
   coord_flip()
 p1 / p2
+
+# Distance to x_interest
+p1 = ggplot(res_mean, aes(x = method, y = dist_x_interest_all)) +
+  geom_boxplot() + 
+  theme_bw() + 
+  coord_flip()
+p2 = ggplot(res_mean, aes(x = method, y = dist_x_interest_nondom)) +
+  geom_boxplot() + 
+  theme_bw() + 
+  coord_flip()
+p1 / p2
+
+# Number non-dominated 
+ggplot(res_mean, aes(x = method, y = no_nondom)) +
+  geom_boxplot() + 
+  theme_bw() + 
+  coord_flip()
+
+# Hypervolume
+ggplot(res_mean, aes(x = method, y = hypervolume)) +
+  geom_boxplot() + 
+  theme_bw() + 
+  coord_flip()
 
 
