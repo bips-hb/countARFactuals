@@ -16,17 +16,25 @@ set.seed(1, "L'Ecuyer-CMRG")
 generate_cfexp = function(datanam, x_interest_id = 1L, method = "CountARF", nondom = FALSE, subset_valid = TRUE) {
   
   # get model & data
-  predictor = readRDS(file.path("R_experiments/predictors", paste0(datanam, ".rds")))
+  xgbmodel =  xgboost::xgb.load(file.path("python/synthetic/xgboost_paras", paste0(datanam, ".model")))
   x_interest = read.csv(file.path("python/synthetic/x_interests", paste0(datanam, ".csv")))[x_interest_id,]
   dt = read.csv(file.path("python/synthetic/data/", paste0(datanam, ".csv")), header = TRUE)
   
   # get desired class
+  predictor = Predictor$new(model = xgbmodel, data = dt, y = "y", predict.function = predict.xgboost)
   pred = predictor$predict(x_interest)
-  if (ncol(pred) > 1) {
-    target_class = apply(pred, 1, function(pr) names(which.min(pr)))
-  } else {
-    target_class = apply(pred, 1, function(pr) ifelse(pr > 0.5, 0, 1))
-  }
+  predictor$task = "classification"
+  # if (ncol(pred) > 1) {
+  #   target_class = apply(pred, 1, function(pr) names(which.min(pr)))
+  # } else {
+  #   target_class = as.character(apply(pred, 1, function(pr) ifelse(pr > 0.5, 0, 1)))
+  # }
+  target_class = "pred"
+    if (pred < 0.5) {
+      desired_prob = c(0.5, 1)
+    } else {
+      desired_prob = c(0, 0.5)
+    }
 
   
   if (method == "MOC") {
@@ -35,12 +43,16 @@ generate_cfexp = function(datanam, x_interest_id = 1L, method = "CountARF", nond
     cac = CountARFactualClassif$new(predictor = predictor)
   }
   cfexpobj = cac$find_counterfactuals(
-    x_interest, desired_class = target_class, desired_prob = c(0.5, 1)
+    x_interest, desired_class = target_class, desired_prob = desired_prob
   )
   
+  if (subset_valid) {
+    cfexpobj$subset_to_valid()
+  }
+  
   if (nondom) {
-    cfexp = cfexpobj$evaluate()
-    fitnesses = cfexp[, c("dist_x_interest", "no_changed", "dist_train", "dist_target")]
+    cfexp = cfexpobj$evaluate(arf = cac$.__enclos_env__$private$arf)
+    fitnesses = cfexp[, c("dist_x_interest", "no_changed", "neg_lik", "dist_target")]
     cfexp = cfexp[miesmuschel::rank_nondominated(-as.matrix(fitnesses))$fronts == 1, 1:2]
   } else {
     cfexp = cfexpobj$data
@@ -54,15 +66,18 @@ generate_cfexp = function(datanam, x_interest_id = 1L, method = "CountARF", nond
   
   # Replace Class by predicted Class
   preds = predictor$predict(df_orig)
-  df_orig$y = colnames(preds)[apply(preds,1,which.max)]
+  df_orig$y = ifelse(preds > 0.5, 1, 0)
   
-  # subset valid
-  if (subset_valid) {
-    df_orig[ !(Data == "Counterfactuals" & y != target_class),] 
-  } else {
-    df_orig
-  }
+  return(df_orig)
 }
+
+
+predict.xgboost = function(object, newdata){
+  newData_x = xgb.DMatrix(data.matrix(newdata), missing = NA)
+  results = predict(object, newData_x, reshape = TRUE)
+  return(results)
+}
+
 
 
 if (FALSE) {
@@ -89,6 +104,20 @@ ggplot(df, aes(x = x1, y = x2, color = Data)) +
   geom_point(alpha = 0.75) + 
   scale_color_ordinal() + 
   facet_grid(Method ~ Dataset) + 
+  theme_bw() + 
+  theme(text = element_text(size = 14))
+
+# MOC & ARF
+df_arf_1 = generate_cfexp(datanam = "two_sines", x_interest_id = 1L)
+df_moc_1 = generate_cfexp(datanam = "two_sines", method = "MOC", x_interest_id = 1L)
+
+df = rbind(df_arf_1, df_moc_1)
+df[Data == "Train", Data := paste0("Train_", y)]
+
+ggplot(df, aes(x = x1, y = x2, color = Data)) + 
+  geom_point(alpha = 0.75) + 
+  scale_color_ordinal() + 
+  facet_grid( ~ Method) + 
   theme_bw() + 
   theme(text = element_text(size = 14))
 
