@@ -17,11 +17,11 @@ reg_dir = file.path("registries", reg_name)
 unlink(reg_dir, recursive = TRUE)
 makeExperimentRegistry(file.dir = reg_dir, seed = 42, 
   packages = c("mlr3verse", "mlr3oml", "iml", "arf", 
-    "counterfactuals", "xgboost"), source = c("R_experiments/utils_experiment.R"))
+    "counterfactuals", "xgboost", "data.table", "foreach"), 
+  source = c("R_experiments/utils_experiment.R"))
 
 # Problems -----------------------------------------------------------
 get_data = function(data, job, id) {
-  # Get data
   # get model & data
   xgbmodel =  xgboost::xgb.load(file.path("python/synthetic/xgboost_paras", paste0(id, ".model")))
   x_interests = read.csv(file.path("python/synthetic/x_interests", paste0(id, ".csv")))
@@ -36,9 +36,10 @@ get_data = function(data, job, id) {
   dt[, y := NULL]
   dt[, yhat := predictor$predict(dt)]
   arf = arf::adversarial_rf(x = dt, parallel = FALSE)
+  psi = arf::forde(arf, dt, parallel = FALSE)
   
   # Return task, predictor, etc.
-  list(dt = dt, predictor = predictor, x_interests = x_interests, arf = arf)
+  list(dt = dt, predictor = predictor, x_interests = x_interests, arf = arf, psi = psi)
 }
 addProblem(name = "sim", fun = get_data, seed = 43)
 
@@ -47,7 +48,7 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
   
   target_class = "pred"
   
-  # TODO: loop for x_interests
+  # Loop over x_interests
   foreach(idx = seq_len(nrow(instance$x_interests)), .combine = rbind) %do% {
 
     x_interest = instance$x_interests[idx,]
@@ -63,12 +64,13 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     # Generate counterfactuals, coverage only
     if (cf_method == "MOCARF") {
       cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "lik", 
-        conditional_mutator = "arf_multi", arf = instance$arf, ...)
+        conditional_mutator = "arf_multi", arf = instance$arf, psi = instance$psi, ...)
     } else if (cf_method == "MOC") {
       cac = MOCClassif$new(predictor = instance$predictor, ...)
     } else if (cf_method == "ARF") {
       cac = CountARFactualClassif$new(predictor = instance$predictor, 
-        weight_node_selector = c(weight_coverage, weight_proximity), arf = instance$arf, ...)
+        weight_node_selector = c(weight_coverage, weight_proximity), arf = instance$arf, 
+        psi = instance$psi, ...)
     }
     cfexpobj = cac$find_counterfactuals(x_interest, 
       desired_class = target_class, 
@@ -76,11 +78,12 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     cfexpobj$subset_to_valid()
     
     # Evaluate counterfactuals, use ARF for plausibility evaluation
-    res_set = cfexpobj$evaluate_set(plausibility_measure = "lik", arf = instance$arf)
+    res_set = cfexpobj$evaluate_set(plausibility_measure = "lik", arf = instance$arf, psi = instance$psi)
     
     # Find non-dominated CFs
     measures = c("dist_x_interest", "no_changed", "neg_lik")
-    cfexp = cfexpobj$evaluate(arf = instance$arf, measures = c(measures, "dist_train"))
+    cfexp = cfexpobj$evaluate(arf = instance$arf, measures = c(measures, "dist_train"), 
+                              psi = instance$psi)
     cfexp[, nondom := miesmuschel::rank_nondominated(-as.matrix(cfexp[, ..measures]))$fronts == 1]
     
     # Evaluate all and non-dominated only
