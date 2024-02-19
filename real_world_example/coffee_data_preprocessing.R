@@ -1,4 +1,4 @@
-########## COFFEE DATASET ######
+########## COFFEE DATASET PREPROCESSING ######
 
 ## SOURCES: 
 # https://github.com/jldbc/coffee-quality-database/tree/master/data
@@ -9,9 +9,10 @@
 library(data.table)
 library(dplyr)
 library(forcats)
+library(stringr)
 
 # readin
-coffee = data.table(read.csv("real_world_example/arabica_data_cleaned.csv", sep = ",", header = TRUE, row.names = "X"))
+coffee = data.table(read.csv("real_world_example/raw_data/arabica_data_cleaned.csv", sep = ",", header = TRUE, row.names = "X"))
 dim(coffee)
 
 ## Preproocessing
@@ -54,4 +55,12 @@ sort(coffee$altitude_mean_meters)
 coffee = coffee[altitude_mean_meters < 8000,]
 dim(coffee)
 
-write.csv(coffee, "cleaned_data_set.csv")
+# binarize target (total.cup.points --> quality) 
+hist(coffee$total.cup.points)
+median(coffee$total.cup.points) # 82.42 
+
+# new target: quality - label "good" if total.cup.points > median(coffee$total.cup.points) 
+coffee$quality = ifelse(coffee$total.cup.points > median(coffee$total.cup.points), "good", "bad")
+coffee$total.cup.points = NULL
+
+write.csv(coffee, "real_world_example/coffee_data_cleaned.csv", row.names = F)
