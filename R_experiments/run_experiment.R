@@ -1,17 +1,26 @@
-
 library(batchtools)
+library(devtools)
 library(ggplot2)
 library(patchwork)
+library(foreach)
 load_all("counterfactuals_R_package/")
 
 set.seed(42)
 
 repls = 1L
+
+# Hyperpara
 weight_coverage = c(1, 5, 20)
 weight_proximity = c(1, 5, 20)
 node_selector = c("coverage", "coverage_proximity")
-n_synth = c(10L, 200L)
+n_synth = c(20L, 200L)
 num_x_interest = 10L
+
+# Eval strategies
+likelihood_based_eval = FALSE
+complex_evaluation = FALSE
+
+# Datasets
 datanams = c("pawelczyk", "cassini", "two_sines" ,"bn_1")
 
 # Registry ----------------------------------------------------------------
@@ -53,10 +62,13 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
   target_class = "pred"
   n_synth = as.numeric(n_synth)
   
+  p = instance$predictor$data$n.features
+  max_feats_to_change = min(ceiling(sqrt(p) + 3), p)
+  
   # TODO: loop for x_interests
   iters = min(nrow(instance$x_interests), num_x_interest)
   foreach(idx = seq_len(iters), .combine = rbind) %do% {
-
+    
     x_interest = instance$x_interests[idx,]
     
     # derive target_class & probs
@@ -67,38 +79,62 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
       desired_prob = c(0, 0.5)
     }
     # Generate counterfactuals, coverage only
+    start_time = Sys.time()
     if (cf_method == "MOCARF") {
-      cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "lik", 
-        conditional_mutator = "arf_multi", arf = instance$arf, psi = instance$psi)
+      cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "lik", max_changed = p,
+        conditional_mutator = "arf_multi", arf = instance$arf, psi = instance$psi, n_generations = 50L)
     } else if (cf_method == "MOC") {
-      cac = MOCClassif$new(predictor = instance$predictor)
+      cac = MOCClassif$new(predictor = instance$predictor, n_generations = 50L, max_changed = p)
     } else if (cf_method == "ARF") {
-      cac = CountARFactualClassif$new(predictor = instance$predictor, 
+      cac = CountARFactualClassif$new(predictor = instance$predictor, max_feats_to_change = p,
         weight_node_selector = c(weight_coverage, weight_proximity), arf = instance$arf, 
         n_synth = n_synth, node_selector = node_selector, psi = instance$psi)
     }
     cfexpobj = cac$find_counterfactuals(x_interest, 
       desired_class = target_class, 
       desired_prob = desired_prob)
+    end_time = Sys.time()
+    
+    # Subset to only valid counterfactuals
     cfexpobj$subset_to_valid()
     
-    # Evaluate counterfactuals, use ARF for plausibility evaluation
-    res_set = cfexpobj$evaluate_set(plausibility_measure = "lik", arf = instance$arf, psi = instance$psi)
+    # Either eval based on Gower distance to train data or neg likelihood (ARF-based)
+    if (likelihood_based_eval) {
+      plausibility_measure = "lik"
+      measures = c("dist_x_interest", "no_changed", "neg_lik")
+    } else {
+      plausibility_measure = "gower"
+      measures = c("dist_x_interest", "no_changed")
+    }
     
-    # Find non-dominated CFs
-    measures = c("dist_x_interest", "no_changed", "neg_lik")
-    cfexp = cfexpobj$evaluate(arf = instance$arf, measures = c(measures, "dist_train"), 
-                              psi = instance$psi)
-    cfexp[, nondom := miesmuschel::rank_nondominated(-as.matrix(cfexp[, ..measures]))$fronts == 1]
+    # Evaluate single counterfactuals based on measures
+    res = cfexpobj$evaluate(arf = instance$arf, measures = c(measures, "dist_train"), 
+      psi = instance$psi)
     
-    # Evaluate all and non-dominated only
-    res_all = cfexp[, lapply(.SD, mean), .SDcols = measures]
-    res_nondom = cfexp[nondom == TRUE, lapply(.SD, mean), .SDcols = measures]
+    # Aggregate eval of single counterfactuals by averaging
+    res_all = res[, lapply(.SD, mean), .SDcols = measures]
     colnames(res_all) = paste0(colnames(res_all), "_all")
-    colnames(res_nondom) = paste0(colnames(res_nondom), "_nondom")
+    res = cbind(res, res_all)
+    
+    
+    if (complex_evaluation) {
+      
+      # Aggregate eval nondom only
+      res[, nondom := miesmuschel::rank_nondominated(-as.matrix(res[, ..measures]))$fronts == 1]
+      res_nondom = res[nondom == TRUE, lapply(.SD, mean), .SDcols = measures]
+      colnames(res_nondom) = paste0(colnames(res_nondom), "_nondom")
+      res = cbind(res, res_nondom)
+      
+      # Evaluate counterfactual set 
+      res_set = cfexpobj$evaluate_set(plausibility_measure = plausibility_measure, 
+        arf = instance$arf, psi = instance$psi)
+      res = cbind(res, res_set)
+    }
     
     # Return all evaluation measures
-    cbind(cfexp, res_set, res_all, res_nondom)[, id := idx]
+    res[, id := idx]
+    attr(res, "runtime") = as.numeric(end_time - start_time)
+    res
   }
 }
 addAlgorithm(name = "cfs", fun = cfs)
@@ -128,7 +164,7 @@ summarizeExperiments()
 unwrap(getJobPars())
 
 # Test jobs -----------------------------------------------------------
-testJob(id = 1)
+# testJob(id = 1L) 
 
 # Submit -----------------------------------------------------------
 submitJobs()
