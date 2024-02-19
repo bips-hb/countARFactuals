@@ -174,21 +174,22 @@ class DGP:
         calling the set_values method.
         """
         parent_values = self.get_parents_values(node)
-        dist = self.fncs[node](parent_values)
+        d = self.fncs[node](parent_values)
         if self.is_root(node):
-            dist = dist.expand([self.batch_size])
-        assert dist.batch_shape == torch.Size([self.batch_size])
-        assert dist.event_shape == torch.Size([])
-        self.dists[node] = dist
-        return dist
+            d = d.expand([self.batch_size])
+        assert d.batch_shape == torch.Size([self.batch_size])
+        assert d.event_shape == torch.Size([])
+        self.dists[node] = d
+        return d
 
     def sample_node(self, node):
         """Samples a node given the values of its parents.
         The parent values are stored in the DGP object and can be updated using the
         set_values method.
         """
-        dist = self.get_dist_node(node)
-        sample = dist.sample()
+
+        d = self.get_dist_node(node)
+        sample = d.sample()
         assert sample.shape == torch.Size([self.batch_size])
         self.values[node] = sample
         return sample
@@ -308,6 +309,7 @@ def save_dgp_and_data(dgp, path, dgpname):
 
 ## BN_1 graph
 def gen_bn_5(batch_size):
+    import pyro.distributions as dist
     graph = nx.DiGraph()
     graph.add_node('x1')
     graph.add_node('x2')
