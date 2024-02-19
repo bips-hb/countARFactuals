@@ -73,6 +73,8 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     #'   is used to mutate single values.
     #' @param arf (`ranger`) \cr
     #'   Fitted arf. If NULL, arf is newly fitted. 
+    #' @param psi (`list`) \cr
+    #'   Fitted forde object. If NULL, arf::forde is called. 
     #' @param plausibility_measure (`character(1)`) \cr
     #' Which plausibility criterion should be used. Default is 'gower' which measures 
     #' the distance to the nearest `k` training data points weighted by `weights`. 
@@ -93,7 +95,7 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
                           termination_crit = "gens", n_generations = 175L, p_rec = 0.71, p_rec_gen = 0.62, 
                           p_mut = 0.73, p_mut_gen = 0.5, p_mut_use_orig = 0.4, k = 1L, weights = NULL, 
                           lower = NULL, upper = NULL, init_strategy = "icecurve",
-                          conditional_mutator = NULL, plausibility_measure = "gower", arf = NULL,
+                          conditional_mutator = NULL, plausibility_measure = "gower", arf = NULL, psi = NULL,
                           distance_function = "gower", quiet = FALSE) {
       
       if (is.character(distance_function)) {
@@ -184,6 +186,7 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       private$upper = upper
       private$plausibility_measure = plausibility_measure
       private$arf = arf
+      private$psi = psi
       private$quiet = quiet
     },
     
@@ -265,6 +268,7 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     conditional_sampler = NULL,
     plausibility_measure = NULL,
     arf = NULL,
+    psi = NULL,
     quiet = NULL,
 
     run = function() {
@@ -279,7 +283,11 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
         if (is.null(private$arf)) {
           private$arf = adversarial_rf(dat, always.split.variables = "yhat")
         } 
-        private$conditional_sampler = forde(private$arf, dat)
+        if (is.null(private$psi)) {
+          private$conditional_sampler = forde(private$arf, dat)
+        } else {
+          private$conditional_sampler = private$psi
+        }
         class(private$conditional_sampler) = nam
       }
       

@@ -94,10 +94,12 @@ Counterfactuals = R6::R6Class("Counterfactuals",
     #'  specifies the weight of the i-th closest data point.
     #' @param arf (`ranger`) \cr
     #'   Fitted arf. If NULL, arf is newly fitted.
+    #' @param psi (`list`) \cr
+    #'   Fitted forde object. If NULL, arf::forde is called. 
     #'                                              
     #' @md
     evaluate = function(measures = c("dist_x_interest", "dist_target", "no_changed", "dist_train", "neg_lik", "minimality"), 
-      show_diff = FALSE, k = 1L, weights = NULL, arf = NULL) {
+      show_diff = FALSE, k = 1L, weights = NULL, arf = NULL, psi = NULL) {
       
       assert_names(measures, subset.of = c("dist_x_interest", "dist_target", "no_changed", "dist_train", "neg_lik", "minimality"))
       assert_flag(show_diff)
@@ -128,7 +130,12 @@ Counterfactuals = R6::R6Class("Counterfactuals",
       if ("neg_lik" %in% measures) {
           dt = copy(private$predictor$data$X)
           dt[, yhat := private$predictor$predict(dt)[private$get_pred_column()]]
-          cond_sampler = forde(arf, dt)
+          if (is.null(psi)) {
+            cond_sampler = forde(arf, dt)
+          } else {
+            cond_sampler = psi
+          }
+          
           evals$neg_lik = exp(-lik(cond_sampler, private$.data, arf = arf, log = FALSE))
       }
       
@@ -203,8 +210,10 @@ Counterfactuals = R6::R6Class("Counterfactuals",
     #' 1, number of features, 1).
     #' @param arf (`ranger`) \cr
     #'   Fitted arf. If NULL, arf is newly fitted.
+    #' @param psi (`list`) \cr
+    #'   Fitted forde object. If NULL, arf::forde is called. 
     #' 
-    evaluate_set = function(measures = c("diversity", "no_nondom", "frac_nondom", "hypervolume"), plausibility_measure = "gower", nadir = NULL, arf = NULL) {
+    evaluate_set = function(measures = c("diversity", "no_nondom", "frac_nondom", "hypervolume"), plausibility_measure = "gower", nadir = NULL, arf = NULL, psi = NULL) {
       assert_names(measures, subset.of = c("diversity", "no_nondom", "frac_nondom", "hypervolume"))
       assert_class(arf, "ranger", null.ok = plausibility_measure != "lik")
       assert_numeric(nadir, min.len = 1L, max.len = 4L, null.ok = TRUE)
@@ -231,7 +240,7 @@ Counterfactuals = R6::R6Class("Counterfactuals",
           objectives = c("dist_target", "dist_x_interest", "no_changed", "neg_lik")
         }
         
-        res = self$evaluate(objectives, arf = arf)[, objectives, with = FALSE]
+        res = self$evaluate(objectives, arf = arf, psi = psi)[, objectives, with = FALSE]
         if (any(c("no_nondom", "frac_nondom") %in% measures)) {
           idnondom = miesmuschel::rank_nondominated(-as.matrix(res))$fronts == 1
           if ("no_nondom" %in% measures) evals$no_nondom = sum(idnondom)

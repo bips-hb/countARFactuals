@@ -65,12 +65,14 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' How to weight coverage and proximity when `node_selector` is "coverage_proximity".
     #' @param arf (`ranger`) \cr
     #'   Fitted arf. If NULL, arf is newly fitted. 
+    #' @param psi (`list`) \cr
+    #'   Fitted forde object. If NULL, arf::forde is called. 
     #' 
     #' @export
     initialize = function(predictor, max_feats_to_change = predictor$data$n.features, 
       n_synth = 10L, n_iterations = 50L, feature_selector = "random_importance", 
       importance_method = "icesd", node_selector = "coverage_proximity", 
-      weight_node_selector = c(20, 20), arf = NULL) { 
+      weight_node_selector = c(20, 20), arf = NULL, psi = NULL) { 
       # TODO: add other hyperparameter
       super$initialize(predictor)
       checkmate::assert_integerish(max_feats_to_change, lower = 1L, upper = predictor$data$n.features)
@@ -85,6 +87,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       private$n_iterations = n_iterations
       private$importance_method = importance_method
       private$arf = arf
+      private$psi = psi
       private$node_selector = node_selector
       private$weight_node_selector = weight_node_selector
     }
@@ -108,6 +111,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     importance_method = NULL,
     .arf_iterations = NULL,
     arf = NULL,
+    psi = NULL,
     node_selector = NULL,
     weight_node_selector = NULL,
     run = function() {
@@ -119,7 +123,11 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
         private$arf = adversarial_rf(dat, always.split.variables = "yhat")
       }
       private$.arf_iterations = length(private$arf$acc)
-      psi = forde(private$arf, dat)
+      if (is.null(private$psi)) {
+        psi = forde(private$arf, dat)
+      } else {
+        psi = private$psi
+      }
       
       # Gower distances
       leaf_means <- dcast(psi$cnt[variable != "yhat", .(f_idx, variable, mu)], f_idx ~ variable, value.var = "mu")
