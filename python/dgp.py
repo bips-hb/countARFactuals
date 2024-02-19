@@ -9,6 +9,7 @@ import math
 import dill
 import os
 import warnings
+import argparse
 
 # functions that aggregate over the event dimension (-1) but leave batch shape etc unaffected
 AGG_FNCS = {
@@ -306,7 +307,7 @@ def save_dgp_and_data(dgp, path, dgpname):
 
 
 ## BN_1 graph
-def gen_bn_1(batch_size):
+def gen_bn_5(batch_size):
     graph = nx.DiGraph()
     graph.add_node('x1')
     graph.add_node('x2')
@@ -336,22 +337,26 @@ def gen_bn_1(batch_size):
 
 if __name__ == '__main__':
 
-    batch_size = 10000
+    parser = argparse.ArgumentParser(description='Generate and save synthetic data and models.')
+    parser.add_argument('--batch_size', type=int, default=100000, help='The batch size.')
+    args = parser.parse_args()
 
-    dgp = gen_bn_1(batch_size)
+    batch_size = args.batch_size
+
+    dgp = gen_bn_5(batch_size)
     try:
-        save_dgp_and_data(dgp, 'python/synthetic/', 'bn_1')
+        save_dgp_and_data(dgp, 'python/synthetic/', 'bn_5')
     except Exception as e:
         print(e)
-        warnings.warn('Could not save bn_1') 
+        warnings.warn('Could not save bn_5') 
 
 
     ## generate random models and save them
 
     gen_dict = {
         'bn_10' : (10, 0.5),
+        'bn_50' : (10, 0.5),
         'bn_100' : (100, 0.5),
-        'bn_1000' : (1000, 0.3),
     }
 
     for name in gen_dict.keys():
