@@ -3,14 +3,26 @@ import xgboost as xgb
 from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import GridSearchCV
 import scipy.stats as stats
+import argparse
 
 
-data_name = 'two_sines'
-loadpath = 'python/synthetic/'
-train_size = 5000
-x_interest_size = 50
+names = ['bn_5', 'bn_100', 'bn_10', 'bn_50', 'cassini', 'pawelczyk', 'two_sines']
 
-if data_name == 'bn_1':
+parser = argparse.ArgumentParser()
+parser.add_argument('loadpath')
+parser.add_argument('name')
+parser.add_argument('--train_size', type=int, default=5000)
+parser.add_argument('--x_interest_size', type=int, default=50)
+args = parser.parse_args()
+
+assert args.name in names
+data_name = args.name
+loadpath = args.loadpath
+
+train_size = args.train_size
+x_interest_size = args.x_interest_size
+
+if 'bn_' in data_name:
     df = pd.read_csv(loadpath + '{}.csv'.format(data_name), index_col=0)
 else:
     df = pd.read_csv(loadpath + '{}.csv'.format(data_name))
@@ -20,10 +32,10 @@ df['y'] = (df['y'] >= 1).astype(int)
 
 assert df.shape[0] >= train_size + x_interest_size
 
-## Split the data into training and testing sets
+## Split the data into training and test set
 
 df_train = df.iloc[:train_size]
-df_rest = df.iloc[train_size:]
+df_rest = df.iloc[train_size:2*train_size]
 df_rest_filtered = df_rest[df_rest['y'] == 0]
 df_interest = df_rest_filtered.sample(x_interest_size)
 

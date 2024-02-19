@@ -201,10 +201,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='gen_2d_data', description='generates 2d dgps')
     parser.add_argument('savepath', help='in most cases repo/python/ is best')
     parser.add_argument('-p', '--plot', action='store_true')
+    parser.add_argument('--batch_size', type=int, default=10000)
     args = parser.parse_args()
 
     pw = ModelPawelczyk()
-    data = pw.generate_data(10000)
+    data = pw.generate_data(args.batch_size)
     data.to_csv(args.savepath + 'pawelczyk.csv', index=False)
     if args.plot:
         plt.scatter(data['x1'], data['x2'], c=data['y'])
@@ -213,7 +214,7 @@ if __name__ == '__main__':
 
 
     tm = TwoSines()
-    data = tm.generate_data(10000)
+    data = tm.generate_data(args.batch_size)
     data.to_csv(args.savepath + 'two_sines.csv', index=False)
     likelihood = tm.get_log_likelihood(data)
 
@@ -223,21 +224,21 @@ if __name__ == '__main__':
         plt.show()
     
 
-    data = Cassini().generate_data(10000)
+    data = Cassini().generate_data(args.batch_size)
     data.to_csv(args.savepath + 'cassini.csv', index=False)
 
     if args.plot:
         plt.scatter(data['x1'], data['x2'], c=data['y'])
         plt.show()
 
-    steps = np.linspace(-1, 1, 100)
-    x1, x2 = np.meshgrid(steps, steps)
-    grid = pd.DataFrame({'x1': x1.ravel(), 'x2': x2.ravel()})
+    # steps = np.linspace(-1, 1, 100)
+    # x1, x2 = np.meshgrid(steps, steps)
+    # grid = pd.DataFrame({'x1': x1.ravel(), 'x2': x2.ravel()})
 
-    likelihood = Cassini().get_log_likelihood(grid)
-    if args.plot:
-        plt.scatter(x1, x2, c=likelihood)
-        plt.colorbar()  # Add color scale/legend
-        plt.show()
+    # likelihood = Cassini().get_log_likelihood(grid)
+    # if args.plot:
+    #     plt.scatter(x1, x2, c=likelihood)
+    #     plt.colorbar()  # Add color scale/legend
+    #     plt.show()
 
 
