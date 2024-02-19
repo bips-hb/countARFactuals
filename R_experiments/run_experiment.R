@@ -21,7 +21,7 @@ likelihood_based_eval = FALSE
 complex_evaluation = FALSE
 
 # Datasets
-datanams = c("pawelczyk", "cassini", "two_sines" ,"bn_1")
+datanams = c("pawelczyk", "cassini", "two_sines" ,paste("bn", c(1, 5, 10, 50, 100), sep = "_"))
 
 # Registry ----------------------------------------------------------------
 reg_name = "evaluate_simulation"
