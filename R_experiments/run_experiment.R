@@ -2,12 +2,16 @@
 library(batchtools)
 library(ggplot2)
 library(patchwork)
+load_all("counterfactuals_R_package/")
 
 set.seed(42)
 
 repls = 1L
 weight_coverage = c(1, 5, 20)
 weight_proximity = c(1, 5, 20)
+node_selector = c("coverage", "coverage_proximity")
+n_synth = c(10L, 200L)
+num_x_interest = 10L
 datanams = c("pawelczyk", "cassini", "two_sines" ,"bn_1")
 
 # Registry ----------------------------------------------------------------
@@ -43,12 +47,14 @@ get_data = function(data, job, id) {
 addProblem(name = "sim", fun = get_data, seed = 43)
 
 # Algorithms -----------------------------------------------------------
-cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity, ...) {
+cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity, n_synth, node_selector, ...) {
   
   target_class = "pred"
+  n_synth = as.numeric(n_synth)
   
   # TODO: loop for x_interests
-  foreach(idx = seq_len(nrow(instance$x_interests)), .combine = rbind) %do% {
+  iters = min(nrow(instance$x_interests), num_x_interest)
+  foreach(idx = seq_len(iters), .combine = rbind) %do% {
 
     x_interest = instance$x_interests[idx,]
     
@@ -59,16 +65,16 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     } else {
       desired_prob = c(0, 0.5)
     }
-    
     # Generate counterfactuals, coverage only
     if (cf_method == "MOCARF") {
       cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "lik", 
-        conditional_mutator = "arf_multi", arf = instance$arf, ...)
+        conditional_mutator = "arf_multi", arf = instance$arf)
     } else if (cf_method == "MOC") {
-      cac = MOCClassif$new(predictor = instance$predictor, ...)
+      cac = MOCClassif$new(predictor = instance$predictor)
     } else if (cf_method == "ARF") {
       cac = CountARFactualClassif$new(predictor = instance$predictor, 
-        weight_node_selector = c(weight_coverage, weight_proximity), arf = instance$arf, ...)
+        weight_node_selector = c(weight_coverage, weight_proximity), arf = instance$arf, 
+        n_synth = n_synth, node_selector = node_selector)
     }
     cfexpobj = cac$find_counterfactuals(x_interest, 
       desired_class = target_class, 
@@ -103,17 +109,21 @@ prob_design = list(
 )
 
 algo_design = list(
-  cfs = rbind(cbind(expand.grid(weight_coverage = weight_coverage, 
-    weight_proximity = weight_proximity), 
-    node_selector = "coverage_proximity", cf_method = c("ARF")), 
-    data.frame(weight_coverage = 0, weight_proximity = 0, 
-      node_selector = "coverage", cf_method = c("ARF", "MOCARF")), 
-    data.frame(weight_coverage = 0, weight_proximity = 0, node_selector = "NA", 
-      cf_method = c("MOC")))
+  cfs = rbind(
+    ## ARF with different n_synth
+    data.frame(expand.grid(n_synth = n_synth), node_selector = "coverage", 
+      weight_coverage = 0, weight_proximity = 0, cf_method = c("ARF")),
+    ## MOCARF, ARF sampler + plausibility based on lik
+    data.frame(n_synth = "NA", node_selector = "coverage", 
+      weight_coverage = 0, weight_proximity = 0, cf_method = c("MOCARF")),
+    ## Standard ARF without conditional sampler + plausibility based on gower
+    data.frame(n_synth = "NA", node_selector = "NA", 
+      weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("MOC")))
 )
 
 addExperiments(prob_design, algo_design, repls = repls)
 summarizeExperiments()
+unwrap(getJobPars())
 
 # Test jobs -----------------------------------------------------------
 testJob(id = 1)
