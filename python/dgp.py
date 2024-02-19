@@ -2,7 +2,37 @@ import networkx as nx
 import random
 import torch
 import pyro.distributions as dist
+from functools import partial
 import pandas as pd
+import numpy as np
+import math
+import dill
+import os
+import warnings
+
+# functions that aggregate over the event dimension (-1) but leave batch shape etc unaffected
+AGG_FNCS = {
+    'SUM': lambda pv : pv.sum(-1)
+}
+
+def get_random_agg_fnc(d):
+    weights = dist.Normal(0.0, 1.0).sample((d,))
+    weights = weights / weights.abs().sum()
+    bias = dist.Normal(0.0, 0.5).sample((1,))
+    fnc = lambda pv: (weights * pv).sum(-1) + bias
+    return fnc
+
+# functions that take aggregation function and parent values and return parametrized distribution
+DIST_FNCS = {
+    'NORMAL': lambda pv, agg: dist.Normal(agg(pv), 2),
+    'BERN': lambda pv, agg: dist.Binomial(probs=torch.sigmoid(agg(pv)))
+}
+
+def get_random_normal_dist_fnc(agg):
+    sd = torch.abs(dist.Normal(0.0, 2.0).sample((1,)))
+    mu = dist.Normal(0, 3).sample((1,))
+    dist_fnc = lambda pv: dist.Normal(agg(pv)+mu, sd)
+    return dist_fnc
 
 
 class DGP:
@@ -50,8 +80,21 @@ class DGP:
         return graph
     
     @staticmethod
-    def generate_model(graph=None):
-        raise NotImplementedError
+    def generate_model(graph, batch_size=10000):
+        dist_fncs = {}
+        dgp = DGP(graph, dist_fncs, batch_size)
+        cat_nodes = list(np.random.choice(dgp.nodes, size=math.floor(len(dgp.nodes)/2)))
+        if 'y' not in cat_nodes:
+            cat_nodes.append('y')
+        for node in dgp.nodes:
+            d = len(dgp.get_parents(node))
+            agg_fnc = get_random_agg_fnc(d)
+            if node in cat_nodes:
+                dist_fncs[node] = partial(DIST_FNCS['BERN'], agg=agg_fnc)
+            else:
+                dist_fncs[node] = get_random_normal_dist_fnc(agg_fnc)
+        dgp = DGP(graph, dist_fncs, batch_size)
+        return dgp
         
     def set_batch_size(self, batch_size):
         """Allows changing the batch size.
@@ -178,53 +221,144 @@ class DGP:
             df['log_prob'] = log_prob
             return df
         return log_prob
-
-
-
-# generate graph 
     
-graph = nx.DiGraph()
-graph.add_node('x1')
-graph.add_node('x2')
-graph.add_node('x3')
-graph.add_node('x4')
-graph.add_node('y')
+    def save(self, path, foldername):
+        """Saves the DGP object to a file."""
+        if not os.path.exists(path):
+            raise ValueError('Path does not exist')
+        if not path[-1] == '/':
+            raise ValueError('Path must end with /')
+        
+        savepath = path + foldername + '/'
+        if os.path.exists(savepath):
+            raise ValueError('Folder already exists. Rename or remove folder. Savepath: ' + savepath)
+        
+        os.makedirs(path + foldername + '/')
+        
+        nx.write_gexf(self.graph, savepath + 'graph.gexf')
+        with open(savepath + 'dist_fncs.pkl', 'wb') as f:
+            dill.dump(self.fncs, f)
 
-graph.add_edge('x1', 'x3')
-graph.add_edge('x2', 'x3')
-graph.add_edge('x3', 'x4')
-graph.add_edge('x1', 'x4')
-graph.add_edge('x2', 'x4')
-graph.add_edge('x4', 'y')
-graph.add_edge('x2', 'y')
 
-# specify the conditional distributions
+    @staticmethod
+    def load(path, foldername, batch_size):
+        """Loads a DGP object from a file."""
+        loadpath = path + foldername + '/'
+        if not os.path.exists(loadpath):
+            raise ValueError('Folder does not exist')
+        
+        graph = nx.read_gexf(loadpath + 'graph.gexf')
+        with open(loadpath + 'dist_fncs.pkl', 'rb') as f:
+            dist_fncs = dill.load(f)
+        dgp = DGP(graph, dist_fncs, batch_size)
+        return dgp
+    
 
-dist_fncs = {}
-dist_fncs['x1'] = lambda pv: dist.Binomial(probs=torch.tensor([0.7]))
-dist_fncs['x2'] = lambda pv: dist.Normal(torch.tensor([0.0]), torch.tensor([1.0]))
-dist_fncs['x3'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
-dist_fncs['x4'] = lambda pv: dist.Normal(pv.sum(-1), 1.0)
-dist_fncs['y'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
+def model_gen(d, p, batch_size, it=0, lim=100):
+    graph = DGP.generate_graph(d, p)
+    dgp = DGP.generate_model(graph, batch_size)
 
-dgp = DGP(graph, dist_fncs, 10000)
-values = dgp.sample() # returns torch tensor
-values = dgp.get_values() # returns data frame
-values.to_csv('python/synthetic/bn_1.csv',)
+    dgp.sample()
+    values = dgp.get_values(as_df=True)
 
-# dgp.log_prob_node('x1')
-# dgp.log_prob_node('x3')
-# df_likelihood = dgp.log_prob(values, return_df=True)
-# df_likelihood.to_csv('python/synthetic/bn_1.csv', index=False)
+    # check whether model performance is ok
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.model_selection import train_test_split
+    from sklearn.metrics import accuracy_score
 
-# print(df_likelihood.head())
+    data = values.sample(5000, replace=True)
+    X, y = data.drop('y', axis=1), data['y']
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33)
 
-# import seaborn as sns
-import matplotlib.pyplot as plt
+    clf = RandomForestClassifier(n_estimators=100, max_depth=50)
+    clf.fit(X_train, y_train)
+    y_pred = clf.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    print('Accuracy:', accuracy)
+    if 0.7 < accuracy < 0.9:
+        print('Model performance is ok.')
+        return dgp
+    else:
+        print('Model performance bad.')
+        if it < lim:
+            print('Trying again')
+            return model_gen(d, p, batch_size, it=it+1)
+        else:
+            raise RuntimeError('Could not find a good model after {} iterations.'.format(lim))
+        
+def save_dgp_and_data(dgp, path, dgpname):
+    print('trying to save ' + dgpname + ' to ' + path)
+    dgp.sample()
+    values = dgp.get_values(as_df=True)
 
-# sns.pairplot(df_likelihood, vars=['x1', 'x2', 'x3', 'x4'], hue='y')
-# plt.show()
+    dgp.save(path + 'dgps/', dgpname)
+    if not os.path.exists(path + dgpname + '.csv'):
+        print('saving values to csv')
+        values.to_csv(path + dgpname + '.csv', index=False)
+    else:
+        warnings.warn('{}.csv already exists.'.format(dgpname))
 
-graph = DGP.generate_graph(20, 0.5)
-nx.draw(graph, with_labels=True)
-plt.show()
+    # check whether loded DGP gives same likelihoods
+    dgp_check = DGP.load(path + 'dgps/', dgpname, dgp.batch_size)
+    log_prob_check = dgp_check.log_prob(values, return_df=False)
+    log_prob = dgp.log_prob(values, return_df=False)
+    assert sum(log_prob != log_prob_check) == 0
+
+
+## BN_1 graph
+def gen_bn_1(batch_size):
+    graph = nx.DiGraph()
+    graph.add_node('x1')
+    graph.add_node('x2')
+    graph.add_node('x3')
+    graph.add_node('x4')
+    graph.add_node('y')
+
+    graph.add_edge('x1', 'x3')
+    graph.add_edge('x2', 'x3')
+    graph.add_edge('x3', 'x4')
+    graph.add_edge('x1', 'x4')
+    graph.add_edge('x2', 'x4')
+    graph.add_edge('x4', 'y')
+    graph.add_edge('x2', 'y')
+
+    # specify the conditional distributions
+    dist_fncs = {}
+    dist_fncs['x1'] = lambda pv: dist.Binomial(probs=torch.tensor([0.7]))
+    dist_fncs['x2'] = lambda pv: dist.Normal(torch.tensor([0.0]), torch.tensor([1.0]))
+    dist_fncs['x3'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
+    dist_fncs['x4'] = lambda pv: dist.Normal(pv.sum(-1), 1.0)
+    dist_fncs['y'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
+
+    # create the DGP object and save the dgp and sampled values
+    dgp = DGP(graph, dist_fncs, batch_size)
+    return dgp
+
+if __name__ == '__main__':
+
+    batch_size = 10000
+
+    dgp = gen_bn_1(batch_size)
+    try:
+        save_dgp_and_data(dgp, 'python/synthetic/', 'bn_1')
+    except Exception as e:
+        print(e)
+        warnings.warn('Could not save bn_1') 
+
+
+    ## generate random models and save them
+
+    gen_dict = {
+        'bn_10' : (10, 0.5),
+        'bn_100' : (100, 0.5),
+        'bn_1000' : (1000, 0.3),
+    }
+
+    for name in gen_dict.keys():
+        d, p = gen_dict[name]
+        dgp = model_gen(d, p, batch_size)
+        try:
+            save_dgp_and_data(dgp, 'python/synthetic/', name)
+        except Exception as e:
+            print(e)
+            warnings.warn('Could not save {}'.format(name))
