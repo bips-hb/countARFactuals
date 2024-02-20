@@ -16,7 +16,7 @@ rf = randomForest::randomForest(quality ~ ., coffee[-as.numeric(rownames(x_int))
 # generate countARFactuals
 predictor = Predictor$new(rf, type = "prob" )
 countARFactual_classif = CountARFactualClassif$new(predictor)
-my_countARFactuals = countARFactual_classif$find_counterfactuals(x_interest = x_int, desired_class = "good", desired_prob = c(0.5,1)) # doesn't work
+my_countARFactuals = countARFactual_classif$find_counterfactuals(x_interest = x_int, desired_class = "good", desired_prob = c(0.5,1)) 
 
 # have a look
 my_countARFactuals$data
