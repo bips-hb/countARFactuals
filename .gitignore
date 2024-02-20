@@ -51,4 +51,6 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
->>>>>>> 5980f0744b1b16cfa497eba1c4da4852559dd6a0
+
+# python scratch files
+.scratch/
