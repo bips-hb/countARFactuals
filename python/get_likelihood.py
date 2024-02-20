@@ -16,8 +16,8 @@ illustrative_dgps = {
 
 
 dgpname = 'bn_5'
-cf_path = 'cfs/bn_5.csv'
-dgps_path = 'python/synthetic/dgps/'
+cf_path = '../cfs/bn5_cfs.csv'
+dgps_path = 'synthetic/dgps/'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dgpname')
@@ -53,9 +53,9 @@ else:
     if not dgps_path.endswith('/'):
         raise ValueError('cf path must end with / (should be a folder)')
     model = dgp.DGP.load(dgps_path, dgpname, cfs.shape[0])
-    log_probs_0 = model.log_prob(cfss_y[0]).numpy()
-    log_probs_1 = model.log_prob(cfss_y[1]).numpy()
-    log_probs = log_probs_1 + log_probs_0
+    log_probs_0 = model.log_prob(cfss_y[0])
+    log_probs_1 = model.log_prob(cfss_y[1])
+    log_probs = torch.logsumexp(torch.stack([log_probs_0, log_probs_1]), dim=0)
 
 cfs['log_probs'] = log_probs
 
