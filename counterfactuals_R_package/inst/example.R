@@ -2,7 +2,9 @@ library("randomForest")
 library("data.table")
 library("devtools")
 library("arf")
-load_all("")
+load_all("counterfactuals_R_package/")
+
+set.seed(1234L)
 
 data(iris, package = "datasets")
 x_interest = iris[150L, ]

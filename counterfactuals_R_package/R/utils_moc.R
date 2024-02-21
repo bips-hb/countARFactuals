@@ -553,6 +553,8 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
       if (length(fixed_features) > 0) {
         values[, (fixed_features) := x_interest[, fixed_features, with = FALSE]]
       }
+      lowers = private$param_set$lower
+      uppers = private$param_set$upper
       values_mutated = copy(values)
       for (i in seq_len(nrow(values))) {
         if (runif(1L) < private$p_mut) {
@@ -564,7 +566,10 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
              fixed = private$x_interest[, ..cols]
              synth = forge(private$cond_sampler, n_synth = 1, evidence = fixed)
              for (j in mutate_cols) {
-              set(values_mutated, i, j, value = synth[[j]])
+             	if (j %in% names(lowers)) {
+            		mutated_val =  pmax(pmin(synth[[j]], uppers[[j]]), lowers[[j]])
+             	}
+                set(values_mutated, i, j, value = mutated_val)
              }
            }
           } else {
