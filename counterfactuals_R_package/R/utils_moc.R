@@ -524,16 +524,18 @@ make_moc_search_plot = function(data, objectives) {
 # Conditional mutator as described in the MOC paper
 MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
   public = list(
-    initialize = function(cond_sampler, x_interest, param_set, p_mut, p_mut_gen) {
+    initialize = function(cond_sampler, x_interest, evidence, param_set, p_mut, p_mut_gen) {
       super$initialize()
       assert_class(param_set, "ParamSet")
       assert_list(cond_sampler)
       if (inherits(cond_sampler, "ctree_sampler")) {
         assert_list(cond_sampler,  len = length(param_set$ids()))
       } else {
-        assert_true("yhat" %in% names(x_interest))
+        assert_true(!is.null(evidence))
+        assert_true("yhat" %in% evidence$variable)
       }
       private$x_interest = x_interest
+      private$evidence = evidence
       private$param_set = param_set
       private$cond_sampler = cond_sampler
       private$p_mut = p_mut
@@ -543,6 +545,7 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
   private = list(
     cond_sampler = NULL,
     x_interest = NULL,
+    evidence = NULL,
     param_set = NULL,
     p_mut = NULL,
     p_mut_gen = NULL,
@@ -564,7 +567,13 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
              synth = data.table()
              cols = setdiff(names(private$x_interest), mutate_cols)
              fixed = private$x_interest[, ..cols]
-             synth = forge(private$cond_sampler, n_synth = 1, evidence = fixed)
+             if (length(cols) > 0) {
+               evidence = arf:::prep_evi(private$cond_sampler, fixed)
+             } else {
+               evidence = NULL
+             }
+             evidence = rbind(evidence, private$evidence)
+             synth = forge(private$cond_sampler, n_synth = 1, evidence = evidence)
              for (j in mutate_cols) {
              	if (j %in% names(lowers)) {
             		mutated_val =  pmax(pmin(synth[[j]], uppers[[j]]), lowers[[j]])
@@ -581,7 +590,13 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
                   synth = data.table()
                   cols = setdiff(names(private$x_interest), j)
                   fixed = private$x_interest[, ..cols]
-                  synth = forge(private$cond_sampler, n_synth = 1, evidence = fixed)
+                  if (length(cols) > 0) {
+                    evidence = arf:::prep_evi(private$cond_sampler, fixed)
+                  } else {
+                    evidence = NULL
+                  }
+                  evidence = rbind(evidence, private$evidence)
+                  synth = forge(private$cond_sampler, n_synth = 1, evidence = evidence)
                   set(values_mutated, i, j, value = synth[[j]])
                 }
               }
@@ -600,8 +615,8 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
 )
 
 
-make_moc_conditional_mutator = function(ps, x_interest, max_changed, p_mut, p_mut_gen, p_mut_use_orig, cond_sampler) {
-  op_seq1 = MutatorConditional$new(cond_sampler, x_interest, ps, p_mut, p_mut_gen)
+make_moc_conditional_mutator = function(ps, x_interest, evidence, max_changed, p_mut, p_mut_gen, p_mut_use_orig, cond_sampler) {
+  op_seq1 = MutatorConditional$new(cond_sampler, x_interest, evidence, ps, p_mut, p_mut_gen)
   op_seq2 = MutatorReset$new(x_interest, p_mut_use_orig, max_changed)
   mut("sequential", list(op_seq1, op_seq2))
 }
