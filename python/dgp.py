@@ -10,6 +10,7 @@ import dill
 import os
 import warnings
 import argparse
+import json
 
 # functions that aggregate over the event dimension (-1) but leave batch shape etc unaffected
 AGG_FNCS = {
@@ -17,10 +18,13 @@ AGG_FNCS = {
 }
 
 def get_random_agg_fnc(d):
-    weights = dist.Normal(0.0, 1.0).sample((d,))
-    weights = weights / weights.abs().sum()
-    bias = dist.Normal(0.0, 0.5).sample((1,))
-    fnc = lambda pv: (weights * pv).sum(-1) + bias
+    # assumes -1 of last dimension is bias
+    if d > 0:
+        weights = dist.Uniform(-1, 1.0).sample((d,))
+        weights = weights / weights.abs().sum()
+        fnc = lambda pv: (weights * pv[..., :-1]).sum(-1) + pv[..., -1]
+    else:
+        fnc = lambda pv: pv.sum(-1)
     return fnc
 
 # functions that take aggregation function and parent values and return parametrized distribution
@@ -43,7 +47,7 @@ class DGP:
     For efficient computation, the computation is parallelized over the batch dimension.
     The batch dimension must be speficied when creating the class but can be changed later.
     """
-    def __init__(self, graph, dist_fncs, batch_size):
+    def __init__(self, graph, dist_fncs, batch_size, bias=None):
         """
         Args:
             graph (nx.DiGraph): A directed acyclic graph.
@@ -55,10 +59,18 @@ class DGP:
         self.fncs = dist_fncs
         self.values = {}
         self.dists = {}
+        self.bias = {}
+        if bias is None:
+            bias = {}
+        for node in self.nodes:
+            if node in bias.keys():
+                self.bias[node] = float(bias[node])
+            else:
+                self.bias[node] = 0.0
         self.batch_size = batch_size
 
     @staticmethod
-    def generate_graph(d, p=0.5, seed=None):
+    def generate_graph(d, p=0.5, seed=None, it=0, lim=1000):
         if seed is None:
             seed = random.randint(0, 1000)
         graph = nx.gnp_random_graph(d, p, seed, directed=True)
@@ -78,6 +90,11 @@ class DGP:
             else:
                 mapping[node] = 'y'
         graph = nx.relabel_nodes(graph, mapping)
+        if graph.in_degree('y') == 0:
+            if it < lim:
+                return DGP.generate_graph(d, p=p, seed=seed+1)
+            else:
+                raise RuntimeError('Could not find a good graph after {} iterations.'.format(lim))
         return graph
     
     @staticmethod
@@ -95,7 +112,20 @@ class DGP:
             else:
                 dist_fncs[node] = get_random_normal_dist_fnc(agg_fnc)
         dgp = DGP(graph, dist_fncs, batch_size)
+        values = dgp.sample()
+        values = dgp.get_values(as_df=True)
+        dgp._calibrate_bias('y', values)
         return dgp
+    
+    def _calibrate_bias(self, node, values):
+        self.set_values(values)
+        d = self.get_dist_node(node)
+        if isinstance(d, dist.Binomial):
+            self.bias[node] = float(-torch.logit(d.probs).mean())
+        elif isinstance(d, dist.Normal):
+            self.bias[node] = float(-d.mean.mean())
+        else:
+            raise NotImplementedError
         
     def set_batch_size(self, batch_size):
         """Allows changing the batch size.
@@ -166,6 +196,9 @@ class DGP:
             assert not self.values[parent] is None
             valss.append(self.values[parent])
         valss = torch.stack(valss, -1)
+        # append bias
+        biass = torch.tensor(self.bias[node]).repeat(valss.shape[0], 1)
+        valss = torch.cat([valss, biass], -1)
         return valss    
     
     def get_dist_node(self, node):
@@ -238,6 +271,8 @@ class DGP:
         os.makedirs(path + foldername + '/')
         
         nx.write_gexf(self.graph, savepath + 'graph.gexf')
+        with open(savepath + 'biases.json', 'w') as f:
+            json.dump(self.bias, f)
         with open(savepath + 'dist_fncs.pkl', 'wb') as f:
             dill.dump(self.fncs, f)
 
@@ -250,10 +285,53 @@ class DGP:
             raise ValueError('Folder does not exist')
         
         graph = nx.read_gexf(loadpath + 'graph.gexf')
+        with open(loadpath + 'biases.json', 'r') as f:
+            biases = json.load(f)
         with open(loadpath + 'dist_fncs.pkl', 'rb') as f:
             dist_fncs = dill.load(f)
-        dgp = DGP(graph, dist_fncs, batch_size)
+        dgp = DGP(graph, dist_fncs, batch_size, bias=biases)
         return dgp
+    
+def test_model_performance(df_train, df_rest):
+    print('testing model performance ...')
+    from sklearn.metrics import accuracy_score
+    import xgboost as xgb
+    from sklearn.model_selection import GridSearchCV
+
+    X_train, y_train = df_train.drop('y', axis=1), df_train['y']
+    X_rest, y_rest = df_rest.drop('y', axis=1), df_rest['y']
+
+    param_grid = {
+        'max_depth': [3, 5, 7],
+        'learning_rate': [0.1, 0.01, 0.001],
+        'subsample': [0.5, 0.7, 1]
+    }
+
+    # Create the XGBoost model object
+    xgb_model = xgb.XGBClassifier(n_estimators=100, objective='binary:logistic', use_label_encoder=False)
+
+    # Create the GridSearchCV object
+    grid_search = GridSearchCV(xgb_model, param_grid, cv=5, scoring='accuracy')
+
+    # Fit the GridSearchCV object to the training data
+    grid_search.fit(X_train, y_train)
+    
+    params = grid_search.best_params_
+
+    dtrain = xgb.DMatrix(X_train, y_train)
+    drest = xgb.DMatrix(X_rest, y_rest)
+
+    model = xgb.train(
+        params,
+        dtrain
+    )
+
+    y_pred_rest = model.predict(drest)
+    preds = y_pred_rest >= 0.5
+    accuracy = accuracy_score(y_rest, preds)
+    print('accuracy {}'.format(accuracy))
+    print('mean prediction {}'.format(np.mean(preds)))
+    return (0.8 < accuracy < 0.95) and (0.3 < np.mean(preds) < 0.7)
     
 
 def model_gen(d, p, batch_size, it=0, lim=100):
@@ -263,21 +341,20 @@ def model_gen(d, p, batch_size, it=0, lim=100):
     dgp.sample()
     values = dgp.get_values(as_df=True)
 
+    if not (0.3 < values['y'].mean() < 0.7):
+        print('y mean not in [0.3, 0.7]')
+        if it < lim:
+            print('Trying again')
+            return model_gen(d, p, batch_size, it=it+0.3)
+        else:
+            raise RuntimeError('Could not find a good model after {} iterations.'.format(lim))
+
     # check whether model performance is ok
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import accuracy_score
+    assert batch_size >= 10000
+    df_train = values.iloc[:5000]
+    df_rest = values.iloc[5000:10000]
 
-    data = values.sample(5000, replace=True)
-    X, y = data.drop('y', axis=1), data['y']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33)
-
-    clf = RandomForestClassifier(n_estimators=100, max_depth=50)
-    clf.fit(X_train, y_train)
-    y_pred = clf.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    print('Accuracy:', accuracy)
-    if 0.7 < accuracy < 0.9:
+    if test_model_performance(df_train, df_rest):
         print('Model performance is ok.')
         return dgp
     else:
@@ -309,6 +386,7 @@ def save_dgp_and_data(dgp, path, dgpname):
 
 ## BN_1 graph
 def gen_bn_5(batch_size):
+    print('generating bn_5')
     import pyro.distributions as dist
     graph = nx.DiGraph()
     graph.add_node('x1')
@@ -322,19 +400,26 @@ def gen_bn_5(batch_size):
     graph.add_edge('x3', 'x4')
     graph.add_edge('x1', 'x4')
     graph.add_edge('x2', 'x4')
-    graph.add_edge('x4', 'y')
+    graph.add_edge('y', 'x4')
     graph.add_edge('x2', 'y')
 
     # specify the conditional distributions
     dist_fncs = {}
-    dist_fncs['x1'] = lambda pv: dist.Binomial(probs=torch.tensor([0.7]))
-    dist_fncs['x2'] = lambda pv: dist.Normal(torch.tensor([0.0]), torch.tensor([1.0]))
+    dist_fncs['x1'] = lambda pv: dist.Binomial(probs=torch.tensor([0.5]))
+    dist_fncs['x2'] = lambda pv: dist.Normal(torch.tensor([0.0]), torch.tensor([0.3]))
     dist_fncs['x3'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
-    dist_fncs['x4'] = lambda pv: dist.Normal(pv.sum(-1), 1.0)
+    dist_fncs['x4'] = lambda pv: dist.Normal(pv.sum(-1), 0.5)
     dist_fncs['y'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
 
     # create the DGP object and save the dgp and sampled values
     dgp = DGP(graph, dist_fncs, batch_size)
+    dgp.sample()
+    values = dgp.get_values()
+    dgp._calibrate_bias('y', values)
+    dgp.sample()
+    values = dgp.get_values(as_df=True)
+
+    assert test_model_performance(values.iloc[:5000], values.iloc[5000:10000])
     return dgp
 
 if __name__ == '__main__':
@@ -345,12 +430,12 @@ if __name__ == '__main__':
 
     batch_size = args.batch_size
 
-    dgp = gen_bn_5(batch_size)
-    try:
-        save_dgp_and_data(dgp, 'python/synthetic/', 'bn_5')
-    except Exception as e:
-        print(e)
-        warnings.warn('Could not save bn_5') 
+    # dgp = gen_bn_5(batch_size)
+    # try:
+    #     save_dgp_and_data(dgp, 'python/synthetic/', 'bn_5')
+    # except Exception as e:
+    #     print(e)
+    #     warnings.warn('Could not save bn_5') 
 
 
     ## generate random models and save them
@@ -358,7 +443,7 @@ if __name__ == '__main__':
     gen_dict = {
         'bn_10' : (10, 0.5),
         'bn_50' : (10, 0.5),
-        'bn_100' : (100, 0.5),
+        # 'bn_100' : (100, 0.5),
     }
 
     for name in gen_dict.keys():

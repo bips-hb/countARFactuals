@@ -3,7 +3,7 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 import numpy as np
 
-dataname = 'bn_1'
+dataname = 'bn_5'
 loadpath = 'python/synthetic/xgboost_paras/{}.model'.format(dataname)
 
 df_train = pd.read_csv('python/synthetic/data/{}.csv'.format(dataname))
