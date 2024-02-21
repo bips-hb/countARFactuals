@@ -4,10 +4,12 @@ library(ggplot2)
 library(patchwork)
 library(foreach)
 load_all("counterfactuals_R_package/")
+data.table::setDTthreads(1L)
 
 set.seed(42)
 
 repls = 1L
+multicore = TRUE
 
 # Hyperpara
 weight_coverage = c(1, 5, 20)
@@ -24,14 +26,17 @@ complex_evaluation = FALSE
 datanams = c("pawelczyk", "cassini", "two_sines" ,paste("bn", c(1, 5, 10, 50, 100), sep = "_"))
 
 # Registry ----------------------------------------------------------------
-reg_name = "evaluate_simulation"
+reg_name = "evaluate_simulation_new"
 if (!file.exists("registries")) dir.create("registries")
 reg_dir = file.path("registries", reg_name)
 unlink(reg_dir, recursive = TRUE)
-makeExperimentRegistry(file.dir = reg_dir, seed = 42, 
+reg = makeExperimentRegistry(file.dir = reg_dir, seed = 42, 
   packages = c("mlr3verse", "mlr3oml", "iml", "arf", 
     "counterfactuals", "xgboost", "data.table", "foreach"), 
   source = c("R_experiments/utils_experiment.R"))
+if (multicore) {
+	reg$cluster.functions = makeClusterFunctionsMulticore(14L)
+}
 
 # Problems -----------------------------------------------------------
 get_data = function(data, job, id) {
