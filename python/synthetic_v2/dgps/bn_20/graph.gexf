@@ -1,0 +1,111 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gexf xmlns="http://www.gexf.net/1.2draft" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.gexf.net/1.2draft http://www.gexf.net/1.2draft/gexf.xsd" version="1.2">
+  <meta lastmodifieddate="2024-02-22">
+    <creator>NetworkX 3.2.1</creator>
+  </meta>
+  <graph defaultedgetype="directed" mode="static" name="">
+    <nodes>
+      <node id="y" label="y" />
+      <node id="x2" label="x2" />
+      <node id="x1" label="x1" />
+      <node id="x4" label="x4" />
+      <node id="x6" label="x6" />
+      <node id="x3" label="x3" />
+      <node id="x7" label="x7" />
+      <node id="x8" label="x8" />
+      <node id="x10" label="x10" />
+      <node id="x13" label="x13" />
+      <node id="x12" label="x12" />
+      <node id="x5" label="x5" />
+      <node id="x16" label="x16" />
+      <node id="x11" label="x11" />
+      <node id="x14" label="x14" />
+      <node id="x9" label="x9" />
+      <node id="x15" label="x15" />
+      <node id="x17" label="x17" />
+      <node id="x18" label="x18" />
+      <node id="x19" label="x19" />
+    </nodes>
+    <edges>
+      <edge source="y" target="x2" id="0" />
+      <edge source="y" target="x4" id="1" />
+      <edge source="y" target="x6" id="2" />
+      <edge source="y" target="x7" id="3" />
+      <edge source="y" target="x13" id="4" />
+      <edge source="y" target="x12" id="5" />
+      <edge source="y" target="x16" id="6" />
+      <edge source="y" target="x14" id="7" />
+      <edge source="y" target="x9" id="8" />
+      <edge source="y" target="x18" id="9" />
+      <edge source="y" target="x19" id="10" />
+      <edge source="y" target="x3" id="11" />
+      <edge source="y" target="x5" id="12" />
+      <edge source="y" target="x15" id="13" />
+      <edge source="y" target="x17" id="14" />
+      <edge source="x2" target="x4" id="15" />
+      <edge source="x2" target="x6" id="16" />
+      <edge source="x2" target="x13" id="17" />
+      <edge source="x2" target="x12" id="18" />
+      <edge source="x2" target="x5" id="19" />
+      <edge source="x2" target="x19" id="20" />
+      <edge source="x1" target="x4" id="21" />
+      <edge source="x1" target="x3" id="22" />
+      <edge source="x1" target="x8" id="23" />
+      <edge source="x1" target="x13" id="24" />
+      <edge source="x1" target="x14" id="25" />
+      <edge source="x1" target="x9" id="26" />
+      <edge source="x1" target="x15" id="27" />
+      <edge source="x1" target="x19" id="28" />
+      <edge source="x4" target="x6" id="29" />
+      <edge source="x4" target="x7" id="30" />
+      <edge source="x4" target="x8" id="31" />
+      <edge source="x4" target="x13" id="32" />
+      <edge source="x4" target="x12" id="33" />
+      <edge source="x4" target="x11" id="34" />
+      <edge source="x4" target="x15" id="35" />
+      <edge source="x4" target="x19" id="36" />
+      <edge source="x6" target="x10" id="37" />
+      <edge source="x6" target="x16" id="38" />
+      <edge source="x6" target="x14" id="39" />
+      <edge source="x6" target="x17" id="40" />
+      <edge source="x3" target="x7" id="41" />
+      <edge source="x3" target="x13" id="42" />
+      <edge source="x7" target="x12" id="43" />
+      <edge source="x7" target="x16" id="44" />
+      <edge source="x7" target="x11" id="45" />
+      <edge source="x7" target="x15" id="46" />
+      <edge source="x7" target="x17" id="47" />
+      <edge source="x7" target="x18" id="48" />
+      <edge source="x8" target="x13" id="49" />
+      <edge source="x8" target="x12" id="50" />
+      <edge source="x8" target="x15" id="51" />
+      <edge source="x8" target="x19" id="52" />
+      <edge source="x10" target="x13" id="53" />
+      <edge source="x10" target="x16" id="54" />
+      <edge source="x10" target="x14" id="55" />
+      <edge source="x10" target="x15" id="56" />
+      <edge source="x10" target="x17" id="57" />
+      <edge source="x10" target="x18" id="58" />
+      <edge source="x10" target="x19" id="59" />
+      <edge source="x13" target="x16" id="60" />
+      <edge source="x13" target="x18" id="61" />
+      <edge source="x13" target="x19" id="62" />
+      <edge source="x12" target="x15" id="63" />
+      <edge source="x12" target="x17" id="64" />
+      <edge source="x12" target="x19" id="65" />
+      <edge source="x5" target="x9" id="66" />
+      <edge source="x5" target="x17" id="67" />
+      <edge source="x5" target="x18" id="68" />
+      <edge source="x5" target="x19" id="69" />
+      <edge source="x16" target="x17" id="70" />
+      <edge source="x16" target="x18" id="71" />
+      <edge source="x11" target="x14" id="72" />
+      <edge source="x11" target="x19" id="73" />
+      <edge source="x14" target="x17" id="74" />
+      <edge source="x14" target="x19" id="75" />
+      <edge source="x9" target="x18" id="76" />
+      <edge source="x15" target="x17" id="77" />
+      <edge source="x18" target="x19" id="78" />
+    </edges>
+  </graph>
+</gexf>
