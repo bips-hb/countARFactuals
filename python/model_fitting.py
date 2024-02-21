@@ -4,6 +4,7 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import GridSearchCV
 import scipy.stats as stats
 import argparse
+import numpy as np
 
 
 names = ['bn_5', 'bn_100', 'bn_10', 'bn_50', 'cassini', 'pawelczyk', 'two_sines']
@@ -41,6 +42,7 @@ df_interest = df_rest_filtered.sample(x_interest_size)
 
 X_train, y_train = df_train.drop('y', axis=1), df_train['y']
 X_rest, y_rest = df_rest.drop('y', axis=1), df_rest['y']
+X_interest, y_interest = df_interest.drop('y', axis=1), df_interest['y']
 
 
 ## hyperparameter tuning
@@ -52,8 +54,16 @@ param_grid = {
     'subsample': [0.5, 0.7, 1]
 }
 
+# param_grid = {
+#         'min_child_weight': [1, 5, 10],
+#         'gamma': [0.5, 1, 1.5, 2, 5],
+#         'subsample': [0.6, 0.8, 1.0],
+#         'colsample_bytree': [0.6, 0.8, 1.0],
+#         'max_depth': [3, 4, 5]
+# }
+
 # Create the XGBoost model object
-xgb_model = xgb.XGBClassifier()
+xgb_model = xgb.XGBClassifier(n_estimators=100, objective='binary:logistic', use_label_encoder=False)
 
 # Create the GridSearchCV object
 grid_search = GridSearchCV(xgb_model, param_grid, cv=5, scoring='accuracy')
@@ -71,6 +81,7 @@ params = grid_search.best_params_
 
 dtrain = xgb.DMatrix(X_train, y_train)
 drest = xgb.DMatrix(X_rest, y_rest)
+dinterest = xgb.DMatrix(X_interest, y_interest)
 
 model = xgb.train(
     params,
@@ -79,10 +90,15 @@ model = xgb.train(
 
 y_proba_train = model.predict(dtrain)
 y_proba_rest = model.predict(drest)
+y_proba_interest = model.predict(dinterest)
 
-print(roc_auc_score(y_train, y_proba_train))
-print(roc_auc_score(y_rest, y_proba_rest))
+interest_candidates = np.sum(y_proba_interest < 0.5)
+print(interest_candidates, 'negative predictions in x_interest out of ', len(y_proba_interest))
 
+mean_class = np.mean(y_proba_rest >= 0.5)
+print('proportion predicted 1s in test', mean_class)
+assert 0.25 < mean_class < 0.75
+assert interest_candidates >= 10
 
 df_train.to_csv(loadpath + 'data/{}.csv'.format(data_name), index=False)
 df_interest.to_csv(loadpath + 'x_interests/{}.csv'.format(data_name), index=False)
