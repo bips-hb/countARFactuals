@@ -20,12 +20,24 @@ AGG_FNCS = {
     'SUM': lambda pv : pv.sum(-1)
 }
 
-def get_random_agg_fnc(d):
+def get_random_agg_fnc(d, order=3, ii_extra=None, ii_extra_p=0.1):
     # assumes -1 of last dimension is bias
     weights = dist.Uniform(-1, 1.0).sample((d,))
+    if d > 2:
+        weights = weights + dist.Binomial(1, 3/d).sample((d,)) * 3
+    if ii_extra is not None:
+        if random.random() < ii_extra_p:
+            weights[ii_extra] += dist.Uniform(1.0, 4.0).sample((1,))[0]
     weights = weights / weights.abs().sum()
+
+    polynomial_coeffs = dist.Uniform(-1, 1).sample((order,))
+    def polynomial(inp):
+        out = torch.zeros_like(inp)
+        for ii in range(order):
+            out += polynomial_coeffs[ii] * inp**ii
+        return out
     def fnc(pv):
-        return (weights * pv).sum(-1)
+        return polynomial((weights * pv).sum(-1))
     return fnc
 
 # functions that take aggregation function and parent values and return parametrized distribution
@@ -94,24 +106,35 @@ class DGP:
             return dist_fnc(pv, agg)        
 
     @staticmethod
-    def generate_graph(d, p=0.5, seed=None, it=0, lim=1000):
+    def generate_graph(d, p=0.5, seed=None, it=0, lim=1000, y_select='root'):
+        
         if seed is None:
             seed = random.randint(0, 1000)
         graph = nx.gnp_random_graph(d, p, seed, directed=True)
         graph.remove_edges_from([(u, v) for (u, v) in graph.edges() if u > v])
         assert nx.is_directed_acyclic_graph(graph)
         # get max degree node
-        degrees = dict(nx.degree(graph))
-        y = max(degrees, key=degrees.get)
-        # add connections from y to all nodes
+        if y_select == 'max_degree':
+            degrees = dict(nx.degree(graph))
+            y = max(degrees, key=degrees.get)
+        elif y_select == 'random':
+            y = random.choice(list(graph.nodes))
+        elif y_select == 'root':
+            y = list(nx.topological_sort(graph))[0]
+        else:
+            raise NotImplementedError('y_select must be one of [max_degree, random, root]')
+        
+        # add connections from y to all nodes with 0.5 probability
         nodes = list(nx.topological_sort(graph))
 
         for node in nodes:
             # if node prececedes y in nodes add edge node -> y
             if node != y and nodes.index(node) < nodes.index(y):
-                graph.add_edge(node, y)
+                if random.random() < 0.5:
+                    graph.add_edge(node, y)
             elif node != y:
-                graph.add_edge(y, node)
+                if random.random() < 0.5:
+                    graph.add_edge(y, node)
 
         assert nx.is_directed_acyclic_graph(graph)
 
@@ -126,11 +149,12 @@ class DGP:
             else:
                 mapping[node] = 'y'
         graph = nx.relabel_nodes(graph, mapping)
-        if graph.in_degree('y') == 0:
-            if it < lim:
-                return DGP.generate_graph(d, p=p, seed=seed+1)
-            else:
-                raise RuntimeError('Could not find a good graph after {} iterations.'.format(lim))
+        
+        if (y_select in ['max_degree', 'random'] and graph.in_degree('y') == 0) or (y_select == 'root' and graph.out_degree('y') == 0):
+                if it < lim:
+                    return DGP.generate_graph(d, p=p, seed=seed+1)
+                else:
+                    raise RuntimeError('Could not find a good graph after {} iterations.'.format(lim))
         return graph
     
     @staticmethod
@@ -142,8 +166,10 @@ class DGP:
         if 'y' not in cat_nodes:
             cat_nodes.append('y')
         for node in dgp.nodes:
-            d = len(dgp.get_parents(node))
-            agg_fnc = get_random_agg_fnc(d)
+            pars = list(dgp.get_parents(node))
+            d = len(pars)
+            ii_extra = None if 'y' not in pars else pars.index('y')
+            agg_fnc = get_random_agg_fnc(d, order=3, ii_extra=ii_extra, ii_extra_p=1/len(dgp.nodes))
             agg_fncs[node] = agg_fnc
             if node in cat_nodes:
                 dist_fncs[node] = DIST_FNCS['BERN']
@@ -304,7 +330,7 @@ class DGP:
             return df
         return log_prob
     
-    def save(self, path, foldername):
+    def save(self, path, foldername, overwrite=False):
         """Saves the DGP object to a file."""
         if not os.path.exists(path):
             raise ValueError('Path does not exist')
@@ -313,9 +339,10 @@ class DGP:
         
         savepath = path + foldername + '/'
         if os.path.exists(savepath):
-            raise ValueError('Folder already exists. Rename or remove folder. Savepath: ' + savepath)
-        
-        os.makedirs(path + foldername + '/')
+            if not overwrite:
+                raise ValueError('Folder already exists. Rename or remove folder. Savepath: ' + savepath)
+        else:
+            os.makedirs(path + foldername + '/')
         
         nx.write_gexf(self.graph, savepath + 'graph.gexf')
         with open(savepath + 'biases.json', 'w') as f:
@@ -394,7 +421,7 @@ def test_model_performance(df_train, df_rest):
     accuracy = accuracy_score(y_rest, preds)
     print('accuracy {}'.format(accuracy))
     print('mean prediction {}'.format(np.mean(preds)))
-    return (0.8 < accuracy < 0.99) and (0.3 < np.mean(preds) < 0.7)
+    return (0.95 < accuracy < 0.999) and (0.3 < np.mean(preds) < 0.7)
     
 
 def model_gen(d, p, batch_size, it=0, lim=100, proportion_categorical=0.2):
@@ -428,13 +455,13 @@ def model_gen(d, p, batch_size, it=0, lim=100, proportion_categorical=0.2):
         else:
             raise RuntimeError('Could not find a good model after {} iterations.'.format(lim))
         
-def save_dgp_and_data(dgp, path, dgpname):
+def save_dgp_and_data(dgp, path, dgpname, overwrite=False):
     print('trying to save ' + dgpname + ' to ' + path)
     dgp.sample()
     values = dgp.get_values(as_df=True)
 
-    dgp.save(path + 'dgps/', dgpname)
-    if not os.path.exists(path + dgpname + '.csv'):
+    dgp.save(path + 'dgps/', dgpname, overwrite=overwrite)
+    if not os.path.exists(path + dgpname + '.csv') or overwrite:
         print('saving values to csv')
         values.to_csv(path + dgpname + '.csv', index=False)
     else:
@@ -512,8 +539,9 @@ if __name__ == '__main__':
 
     gen_dict = {
         # 'bn_10' : (10, 0.5, 0.2),
-        # 'bn_50' : (10, 0.5, 0.5),
-        'bn_100' : (100, 0.5, 0.5),
+        'bn_10_v2' : (10, 0.6, 0.3),
+        # 'bn_20' : (20, 0.4, 0.3),
+        # 'bn_100' : (100, 0.5, 0.5),
     }
 
     name = 'bn_100'
@@ -524,7 +552,14 @@ if __name__ == '__main__':
         values = dgp.get_values(as_df=True)
         log_prob = dgp.log_prob(values, return_df=True)
         print(log_prob)
-        save_dgp_and_data(dgp, '.scratch/synthetic/', name)
+        try:
+            save_dgp_and_data(dgp, '.scratch/synthetic/', name, overwrite=False)
+        except Exception as e:
+            print(e)
+            warnings.warn('Could not save {}'.format(name))
+            x = input('Continue saving? (y/n)')
+            if x == 'y':
+                save_dgp_and_data(dgp, '.scratch/synthetic/', name, overwrite=True)
         # try:
         #     save_dgp_and_data(dgp, 'python/synthetic/', name)
         # except Exception as e:
