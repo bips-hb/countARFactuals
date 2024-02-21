@@ -23,10 +23,10 @@ likelihood_based_eval = FALSE
 complex_evaluation = FALSE
 
 # Datasets
-datanams = c("pawelczyk", "cassini", "two_sines" ,paste("bn", c(1, 5, 10, 50, 100), sep = "_"))
+datanams = c("pawelczyk", "cassini", "two_sines" ,paste("bn", c(1, 10, 50), sep = "_"))
 
 # Registry ----------------------------------------------------------------
-reg_name = "evaluate_simulation_new"
+reg_name = "evaluate_simulation_21_02"
 if (!file.exists("registries")) dir.create("registries")
 reg_dir = file.path("registries", reg_name)
 unlink(reg_dir, recursive = TRUE)
@@ -53,7 +53,8 @@ get_data = function(data, job, id) {
   dt = as.data.table(dt)
   dt[, y := NULL]
   dt[, yhat := predictor$predict(dt)]
-  arf = arf::adversarial_rf(x = dt, parallel = FALSE)
+  mtry = max(2, floor(sqrt(ncol(dt))))
+  arf = arf::adversarial_rf(x = dt, parallel = FALSE, mtry = mtry)
   psi = arf::forde(arf, dt, parallel = FALSE)
   
   # Return task, predictor, etc.
