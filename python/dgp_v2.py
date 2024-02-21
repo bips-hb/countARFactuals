@@ -11,20 +11,33 @@ import os
 import warnings
 import argparse
 import json
+import inspect
+
+
 
 # functions that aggregate over the event dimension (-1) but leave batch shape etc unaffected
 AGG_FNCS = {
     'SUM': lambda pv : pv.sum(-1)
 }
 
-def get_random_agg_fnc(d):
+def get_random_agg_fnc(d, order=3, ii_extra=None, ii_extra_p=0.1):
     # assumes -1 of last dimension is bias
-    if d > 0:
-        weights = dist.Uniform(-1, 1.0).sample((d,))
-        weights = weights / weights.abs().sum()
-        fnc = lambda pv: (weights * pv[..., :-1]).sum(-1) + pv[..., -1]
-    else:
-        fnc = lambda pv: pv.sum(-1)
+    weights = dist.Uniform(-1, 1.0).sample((d,))
+    if d > 2:
+        weights = weights + dist.Binomial(1, 3/d).sample((d,)) * 3
+    if ii_extra is not None:
+        if random.random() < ii_extra_p:
+            weights[ii_extra] += dist.Uniform(1.0, 4.0).sample((1,))[0]
+    weights = weights / weights.abs().sum()
+
+    polynomial_coeffs = dist.Uniform(-1, 1).sample((order,))
+    def polynomial(inp):
+        out = torch.zeros_like(inp)
+        for ii in range(order):
+            out += polynomial_coeffs[ii] * inp**ii
+        return out
+    def fnc(pv):
+        return polynomial((weights * pv).sum(-1))
     return fnc
 
 # functions that take aggregation function and parent values and return parametrized distribution
@@ -33,10 +46,11 @@ DIST_FNCS = {
     'BERN': lambda pv, agg: dist.Binomial(probs=torch.sigmoid(agg(pv)))
 }
 
-def get_random_normal_dist_fnc(agg):
-    sd = torch.abs(dist.Normal(0.0, 2.0).sample((1,)))
-    mu = dist.Normal(0, 3).sample((1,))
-    dist_fnc = lambda pv: dist.Normal(agg(pv)+mu, sd)
+def get_random_normal_dist_fnc():
+    sd = torch.abs(dist.Normal(0.0, 1.0).sample((1,)))
+    mu = dist.Normal(0, 2).sample((1,))
+    def dist_fnc(pv, agg):
+        return dist.Normal(agg(pv) + mu, sd)
     return dist_fnc
 
 
@@ -47,7 +61,7 @@ class DGP:
     For efficient computation, the computation is parallelized over the batch dimension.
     The batch dimension must be speficied when creating the class but can be changed later.
     """
-    def __init__(self, graph, dist_fncs, batch_size, bias=None):
+    def __init__(self, graph, dist_fncs, agg_fncs, batch_size, bias=None, scale=None):
         """
         Args:
             graph (nx.DiGraph): A directed acyclic graph.
@@ -56,29 +70,74 @@ class DGP:
         """
         self.graph = graph  
         self.nodes = list(nx.topological_sort(self.graph))
-        self.fncs = dist_fncs
+        self.dist_fncs = dist_fncs
+        self.agg_fncs = agg_fncs
         self.values = {}
         self.dists = {}
         self.bias = {}
+        self.scale = {}
         if bias is None:
             bias = {}
+        if scale is None:
+            scale = {}
         for node in self.nodes:
             if node in bias.keys():
                 self.bias[node] = float(bias[node])
             else:
                 self.bias[node] = 0.0
+            if node in scale.keys():
+                self.scale[node] = float(scale[node])
+            else:
+                self.scale[node] = 1.0
         self.batch_size = batch_size
 
     @staticmethod
-    def generate_graph(d, p=0.5, seed=None, it=0, lim=1000):
+    def _agg_scaler(fnc, scale, bias):
+        def wrapper(pv, scale=1.0, bias=0.0):
+            return (fnc(pv) + bias) * scale
+        return partial(wrapper, scale=scale, bias=bias)
+
+    @staticmethod
+    def _safe_call(dist_fnc, pv, agg):
+        """Calls the distribution function with the correct number of arguments for backwards compatibility."""
+        if len(inspect.signature(dist_fnc).parameters) == 1:
+            return dist_fnc(pv)
+        else:
+            return dist_fnc(pv, agg)        
+
+    @staticmethod
+    def generate_graph(d, p=0.5, seed=None, it=0, lim=1000, y_select='root'):
+        
         if seed is None:
             seed = random.randint(0, 1000)
         graph = nx.gnp_random_graph(d, p, seed, directed=True)
         graph.remove_edges_from([(u, v) for (u, v) in graph.edges() if u > v])
         assert nx.is_directed_acyclic_graph(graph)
         # get max degree node
-        degrees = dict(nx.degree(graph))
-        y = max(degrees, key=degrees.get)
+        if y_select == 'max_degree':
+            degrees = dict(nx.degree(graph))
+            y = max(degrees, key=degrees.get)
+        elif y_select == 'random':
+            y = random.choice(list(graph.nodes))
+        elif y_select == 'root':
+            y = list(nx.topological_sort(graph))[0]
+        else:
+            raise NotImplementedError('y_select must be one of [max_degree, random, root]')
+        
+        # add connections from y to all nodes with 0.5 probability
+        nodes = list(nx.topological_sort(graph))
+
+        for node in nodes:
+            # if node prececedes y in nodes add edge node -> y
+            if node != y and nodes.index(node) < nodes.index(y):
+                if random.random() < 0.5:
+                    graph.add_edge(node, y)
+            elif node != y:
+                if random.random() < 0.5:
+                    graph.add_edge(y, node)
+
+        assert nx.is_directed_acyclic_graph(graph)
+
         # relabel nodes
         nodes = list(nx.topological_sort(graph))
         mapping = {}
@@ -90,43 +149,53 @@ class DGP:
             else:
                 mapping[node] = 'y'
         graph = nx.relabel_nodes(graph, mapping)
-        if graph.in_degree('y') == 0:
-            if it < lim:
-                return DGP.generate_graph(d, p=p, seed=seed+1)
-            else:
-                raise RuntimeError('Could not find a good graph after {} iterations.'.format(lim))
+        
+        if (y_select in ['max_degree', 'random'] and graph.in_degree('y') == 0) or (y_select == 'root' and graph.out_degree('y') == 0):
+                if it < lim:
+                    return DGP.generate_graph(d, p=p, seed=seed+1)
+                else:
+                    raise RuntimeError('Could not find a good graph after {} iterations.'.format(lim))
         return graph
     
     @staticmethod
-    def generate_model(graph, batch_size=10000):
+    def generate_model(graph, batch_size=10000, proportion_categorical=0.2):
         dist_fncs = {}
-        dgp = DGP(graph, dist_fncs, batch_size)
-        cat_nodes = list(np.random.choice(dgp.nodes, size=math.floor(len(dgp.nodes)/2)))
+        agg_fncs = {}
+        dgp = DGP(graph, dist_fncs, agg_fncs, batch_size)
+        cat_nodes = list(np.random.choice(dgp.nodes, size=math.floor(len(dgp.nodes)*proportion_categorical)))
         if 'y' not in cat_nodes:
             cat_nodes.append('y')
         for node in dgp.nodes:
-            d = len(dgp.get_parents(node))
-            agg_fnc = get_random_agg_fnc(d)
+            pars = list(dgp.get_parents(node))
+            d = len(pars)
+            ii_extra = None if 'y' not in pars else pars.index('y')
+            agg_fnc = get_random_agg_fnc(d, order=3, ii_extra=ii_extra, ii_extra_p=1/len(dgp.nodes))
+            agg_fncs[node] = agg_fnc
             if node in cat_nodes:
-                dist_fncs[node] = partial(DIST_FNCS['BERN'], agg=agg_fnc)
+                dist_fncs[node] = DIST_FNCS['BERN']
             else:
-                dist_fncs[node] = get_random_normal_dist_fnc(agg_fnc)
-        dgp = DGP(graph, dist_fncs, batch_size)
-        values = dgp.sample()
-        values = dgp.get_values(as_df=True)
-        dgp._calibrate_bias('y', values)
+                dist_fncs[node] = get_random_normal_dist_fnc()
+        dgp = DGP(graph, dist_fncs, agg_fncs, batch_size)
+        dgp.sample()
+        dgp._calibrate_agg()
+        dgp.sample()
         return dgp
     
-    def _calibrate_bias(self, node, values):
-        self.set_values(values)
-        d = self.get_dist_node(node)
-        if isinstance(d, dist.Binomial):
-            self.bias[node] = float(-torch.logit(d.probs).mean())
-        elif isinstance(d, dist.Normal):
-            self.bias[node] = float(-d.mean.mean())
-        else:
-            raise NotImplementedError
-        
+    def _calibrate_agg_node(self, node):
+        """Calibrates the bias and scale of a node given the values of its parents. Only works when agg function is used"""
+        if not self.is_root(node):
+            pv = self.get_parents_values(node)
+            inp = self.agg_fncs[node](pv)
+            self.bias[node] = float(- inp.mean())
+            self.scale[node] = float(1.0 / inp.std())
+
+    def _calibrate_agg(self):
+        """Calibrates the bias and scale of all nodes given the values of the parents."""
+        self.sample()
+        for node in self.nodes:
+            self._calibrate_agg_node(node)
+            self.sample_node(node)
+
     def set_batch_size(self, batch_size):
         """Allows changing the batch size.
         
@@ -196,9 +265,6 @@ class DGP:
             assert not self.values[parent] is None
             valss.append(self.values[parent])
         valss = torch.stack(valss, -1)
-        # append bias
-        biass = torch.tensor(self.bias[node]).repeat(valss.shape[0], 1)
-        valss = torch.cat([valss, biass], -1)
         return valss    
     
     def get_dist_node(self, node):
@@ -207,7 +273,14 @@ class DGP:
         calling the set_values method.
         """
         parent_values = self.get_parents_values(node)
-        d = self.fncs[node](parent_values)
+        if node in self.agg_fncs.keys():
+            agg = self.agg_fncs[node]
+            agg = DGP._agg_scaler(agg, self.scale[node], self.bias[node])
+        else:
+            agg = None
+            assert self.bias[node] == 0.0 and self.scale[node] == 1.0
+        d = DGP._safe_call(self.dist_fncs[node], parent_values, agg)
+        
         if self.is_root(node):
             d = d.expand([self.batch_size])
         assert d.batch_shape == torch.Size([self.batch_size])
@@ -257,7 +330,7 @@ class DGP:
             return df
         return log_prob
     
-    def save(self, path, foldername):
+    def save(self, path, foldername, overwrite=False):
         """Saves the DGP object to a file."""
         if not os.path.exists(path):
             raise ValueError('Path does not exist')
@@ -266,15 +339,20 @@ class DGP:
         
         savepath = path + foldername + '/'
         if os.path.exists(savepath):
-            raise ValueError('Folder already exists. Rename or remove folder. Savepath: ' + savepath)
-        
-        os.makedirs(path + foldername + '/')
+            if not overwrite:
+                raise ValueError('Folder already exists. Rename or remove folder. Savepath: ' + savepath)
+        else:
+            os.makedirs(path + foldername + '/')
         
         nx.write_gexf(self.graph, savepath + 'graph.gexf')
         with open(savepath + 'biases.json', 'w') as f:
             json.dump(self.bias, f)
+        with open(savepath + 'scales.json', 'w') as f:
+            json.dump(self.scale, f)
         with open(savepath + 'dist_fncs.pkl', 'wb') as f:
-            dill.dump(self.fncs, f)
+            dill.dump(self.dist_fncs, f)
+        with open(savepath + 'agg_fncs.pkl', 'wb') as f:
+            dill.dump(self.agg_fncs, f)
 
 
     @staticmethod
@@ -284,12 +362,24 @@ class DGP:
         if not os.path.exists(loadpath):
             raise ValueError('Folder does not exist')
         
+        biases = None
+        scales = None
+        
         graph = nx.read_gexf(loadpath + 'graph.gexf')
-        with open(loadpath + 'biases.json', 'r') as f:
-            biases = json.load(f)
+        if os.path.exists(loadpath + 'biases.json'):
+            with open(loadpath + 'biases.json', 'r') as f:
+                biases = json.load(f)
+        if os.path.exists(loadpath + 'scales.json'):
+            with open(loadpath + 'scales.json', 'r') as f:
+                scales = json.load(f)
         with open(loadpath + 'dist_fncs.pkl', 'rb') as f:
             dist_fncs = dill.load(f)
-        dgp = DGP(graph, dist_fncs, batch_size, bias=biases)
+        if os.path.exists(loadpath + 'agg_fncs.pkl'):
+            with open(loadpath + 'agg_fncs.pkl', 'rb') as f:
+                agg_fncs = dill.load(f)
+        else:
+            agg_fncs = {}
+        dgp = DGP(graph, dist_fncs, agg_fncs, batch_size, bias=biases, scale=scales)
         return dgp
     
 def test_model_performance(df_train, df_rest):
@@ -302,7 +392,7 @@ def test_model_performance(df_train, df_rest):
     X_rest, y_rest = df_rest.drop('y', axis=1), df_rest['y']
 
     param_grid = {
-        'max_depth': [3, 5, 7],
+        'max_depth': [3, 5, 7, 15],
         'learning_rate': [0.1, 0.01, 0.001],
         'subsample': [0.5, 0.7, 1]
     }
@@ -331,18 +421,18 @@ def test_model_performance(df_train, df_rest):
     accuracy = accuracy_score(y_rest, preds)
     print('accuracy {}'.format(accuracy))
     print('mean prediction {}'.format(np.mean(preds)))
-    return (0.8 < accuracy < 0.95) and (0.3 < np.mean(preds) < 0.7)
+    return (0.95 < accuracy < 0.999) and (0.3 < np.mean(preds) < 0.7)
     
 
-def model_gen(d, p, batch_size, it=0, lim=100):
+def model_gen(d, p, batch_size, it=0, lim=100, proportion_categorical=0.2):
     graph = DGP.generate_graph(d, p)
-    dgp = DGP.generate_model(graph, batch_size)
+    dgp = DGP.generate_model(graph, batch_size, proportion_categorical=proportion_categorical)
 
     dgp.sample()
     values = dgp.get_values(as_df=True)
 
-    if not (0.3 < values['y'].mean() < 0.7):
-        print('y mean not in [0.3, 0.7]')
+    if not (0.4 < values['y'].mean() < 0.6):
+        print('y mean not in [0.4, 0.6]')
         if it < lim:
             print('Trying again')
             return model_gen(d, p, batch_size, it=it+0.3)
@@ -365,13 +455,13 @@ def model_gen(d, p, batch_size, it=0, lim=100):
         else:
             raise RuntimeError('Could not find a good model after {} iterations.'.format(lim))
         
-def save_dgp_and_data(dgp, path, dgpname):
+def save_dgp_and_data(dgp, path, dgpname, overwrite=False):
     print('trying to save ' + dgpname + ' to ' + path)
     dgp.sample()
     values = dgp.get_values(as_df=True)
 
-    dgp.save(path + 'dgps/', dgpname)
-    if not os.path.exists(path + dgpname + '.csv'):
+    dgp.save(path + 'dgps/', dgpname, overwrite=overwrite)
+    if not os.path.exists(path + dgpname + '.csv') or overwrite:
         print('saving values to csv')
         values.to_csv(path + dgpname + '.csv', index=False)
     else:
@@ -405,17 +495,19 @@ def gen_bn_5(batch_size):
 
     # specify the conditional distributions
     dist_fncs = {}
-    dist_fncs['x1'] = lambda pv: dist.Binomial(probs=torch.tensor([0.5]))
-    dist_fncs['x2'] = lambda pv: dist.Normal(torch.tensor([0.0]), torch.tensor([0.3]))
+    agg_fncs = {}
+    dist_fncs['x1'] = lambda _: dist.Binomial(probs=torch.tensor([0.5]))
+    dist_fncs['x2'] = lambda _: dist.Normal(torch.tensor([0.0]), torch.tensor([0.3]))
     dist_fncs['x3'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
     dist_fncs['x4'] = lambda pv: dist.Normal(pv.sum(-1), 0.5)
-    dist_fncs['y'] = lambda pv: dist.Binomial(probs=torch.sigmoid(pv.sum(-1)))
+    agg_fncs['y'] = lambda pv: pv.sum(-1)
+    dist_fncs['y'] = lambda pv, agg: dist.Binomial(probs=torch.sigmoid(agg(pv)))
 
     # create the DGP object and save the dgp and sampled values
-    dgp = DGP(graph, dist_fncs, batch_size)
+    dgp = DGP(graph, dist_fncs, agg_fncs, batch_size)
     dgp.sample()
     values = dgp.get_values()
-    dgp._calibrate_bias('y', values)
+    dgp._calibrate_agg_node('y')
     dgp.sample()
     values = dgp.get_values(as_df=True)
 
@@ -431,6 +523,11 @@ if __name__ == '__main__':
     batch_size = args.batch_size
 
     # dgp = gen_bn_5(batch_size)
+
+    # dgp.sample()
+    # values = dgp.get_values(as_df=True)
+    # dgp.log_prob(values, return_df=True)
+
     # try:
     #     save_dgp_and_data(dgp, 'python/synthetic/', 'bn_5')
     # except Exception as e:
@@ -441,16 +538,30 @@ if __name__ == '__main__':
     ## generate random models and save them
 
     gen_dict = {
-        'bn_10' : (10, 0.5),
-        'bn_50' : (10, 0.5),
-        # 'bn_100' : (100, 0.5),
+        # 'bn_10' : (10, 0.5, 0.2),
+        'bn_10_v2' : (10, 0.6, 0.3),
+        # 'bn_20' : (20, 0.4, 0.3),
+        # 'bn_100' : (100, 0.5, 0.5),
     }
 
+    name = 'bn_100'
     for name in gen_dict.keys():
-        d, p = gen_dict[name]
-        dgp = model_gen(d, p, batch_size)
+        d, p, prop_cat = gen_dict[name]
+        dgp = model_gen(d, p, batch_size, proportion_categorical=prop_cat)
+        dgp.sample()
+        values = dgp.get_values(as_df=True)
+        log_prob = dgp.log_prob(values, return_df=True)
+        print(log_prob)
         try:
-            save_dgp_and_data(dgp, 'python/synthetic/', name)
+            save_dgp_and_data(dgp, 'python/synthetic_v2/', name, overwrite=False)
         except Exception as e:
             print(e)
             warnings.warn('Could not save {}'.format(name))
+            x = input('Continue saving? (y/n)')
+            if x == 'y':
+                save_dgp_and_data(dgp, 'python/synthetic_v2/', name, overwrite=True)
+        # try:
+        #     save_dgp_and_data(dgp, 'python/synthetic/', name)
+        # except Exception as e:
+        #     print(e)
+        #     warnings.warn('Could not save {}'.format(name))
