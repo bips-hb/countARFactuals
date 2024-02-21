@@ -23,7 +23,7 @@ likelihood_based_eval = FALSE
 complex_evaluation = FALSE
 
 # Datasets
-datanams = c("pawelczyk", "cassini", "two_sines" ,paste("bn", c(1, 10, 50), sep = "_"))
+datanams = c("pawelczyk", "cassini", "two_sines" ,paste("bn", c(1, 5, 10, 50), sep = "_"))
 
 # Registry ----------------------------------------------------------------
 reg_name = "evaluate_simulation_21_02"
@@ -139,7 +139,7 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     
     # Return all evaluation measures
     res[, id := idx]
-    attr(res, "runtime") = as.numeric(end_time - start_time)
+    res[, runtime := as.numeric(end_time - start_time)]
     res
   }
 }
