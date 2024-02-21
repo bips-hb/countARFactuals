@@ -11,24 +11,7 @@ eval_columns = c("dist_x_interest", "no_changed", "dist_train", "dist_x_interest
 
 res = NULL
 
-# registry1 = "registries/evaluate_simulation/"
-# registry2 = "registries/evaluate_simulation_new/"
-# 
-# registries = c(registry1, registry2)
-# 
-# for (registry in c(registry1, registry2)) {
-# 	loadRegistry(registry)
-# 	done_ids = findDone()$job.id	
-# 	
-# 	for (id in done_ids) {
-# 		cfe = readRDS(file.path(registry, "results", paste0(id, ".rds")))
-# 		cols = c(eval_columns, "id")
-# 		cfe = cfe[, ..cols]
-# 		exp_info = unwrap(getJobPars(id = id))
-# 		setnames(exp_info, "id", "dataset")
-# 		res = rbind(res, cbind(cfe, exp_info))
-# 	}
-# }
+
 
 files = list.files("cfs/")
 files = files[grepl(files, pattern = "log_probs")]
@@ -53,9 +36,47 @@ res_mean <- res[, lapply(.SD, mean), .SDcols = eval_columns, by = .(method, data
 
 plotdata = melt(res_mean, id.vars=c("method", "dataset", "id"))
 
-ggplot(plotdata, aes(x = method, y = value, fill = method)) + 
+plot1 = ggplot(plotdata, aes(x = method, y = value, fill = method)) + 
 	geom_boxplot() + 
     facet_grid(variable ~ dataset, scales = "free") + 
 	theme_bw() +
 	scale_color_brewer(palette="BrBG") + 
 	theme(legend.position="none") 
+
+
+ggsave(filename = "R_experiments/results_study.png", plot = plot1, dpi = 200, width = 8, height = 8)
+
+
+# Time running ------------
+time_res = NULL
+registry1 = "registries/evaluate_simulation/"
+registry2 = "registries/evaluate_simulation_new/"
+
+registries = c(registry1, registry2)
+
+for (registry in c(registry1, registry2)) {
+	loadRegistry(registry)
+	done_ids = findDone()$job.id
+
+	for (id in done_ids) {
+		cols = c("job.id", "time.running")
+		time = unwrap(getJobTable(ids = id))[, ..cols]
+		exp_info = unwrap(getJobPars(id = id))
+		setnames(exp_info, "id", "dataset")
+		time_res = rbind(time_res, merge(time, exp_info, by = "job.id"))
+	}
+}
+
+time_res[, method := ifelse(cf_method == "ARF", paste(cf_method, n_synth), cf_method)]
+
+plot2 = ggplot(time_res, aes(x = method, y = as.numeric(time.running), fill = method)) + 
+	geom_boxplot() + 
+	theme_bw() +
+	scale_color_brewer(palette="BrBG") + 
+	theme(legend.position="none") +
+	geom_line(aes(group=dataset), color = "gray")
+plot2
+
+
+ggsave(filename = "R_experiments/results_study.png", plot = plot1, dpi = 200, width = 8, height = 8)
+
