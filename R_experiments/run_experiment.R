@@ -19,14 +19,15 @@ n_synth = c(20L, 200L)
 num_x_interest = 10L
 
 # Eval strategies
-likelihood_based_eval = FALSE
-complex_evaluation = FALSE
+complex_evaluation = TRUE
 
 # Datasets
-datanams = c("pawelczyk", "cassini", "two_sines" ,paste("bn", c(1, 5, 10, 50), sep = "_"))
+datanams = c("pawelczyk", "cassini", "two_sines",
+  paste("bn", c(5, 10, 20, 50), sep = "_"), 
+  paste("bn", c(5, 10), "v2", sep = "_"))
 
 # Registry ----------------------------------------------------------------
-reg_name = "evaluate_simulation_21_02"
+reg_name = "evaluate_simulation_22_02"
 if (!file.exists("registries")) dir.create("registries")
 reg_dir = file.path("registries", reg_name)
 unlink(reg_dir, recursive = TRUE)
@@ -41,9 +42,14 @@ if (multicore) {
 # Problems -----------------------------------------------------------
 get_data = function(data, job, id) {
   # get model & data
-  xgbmodel =  xgboost::xgb.load(file.path("python/synthetic/xgboost_paras", paste0(id, ".model")))
-  x_interests = read.csv(file.path("python/synthetic/x_interests", paste0(id, ".csv")))
-  dt = fread(file.path("python/synthetic/data/", paste0(id, ".csv")), header = TRUE)
+  if (id %in% c("bn_20","bn_5_v2", "bn_10_v2")) {
+    data_path = "python/synthetic_v2/"
+  }  else {
+    data_path = "python/synthetic/"
+  }
+  xgbmodel =  xgboost::xgb.load(file.path(data_path, "xgboost_paras", paste0(id, ".model")))
+  x_interests = read.csv(file.path(data_path, "x_interests", paste0(id, ".csv")))
+  dt = fread(file.path(data_path, "data/", paste0(id, ".csv")), header = TRUE)
   
   # get desired class
   predictor = Predictor$new(model = xgbmodel, data = dt, y = "y", predict.function = predict.xgboost)
@@ -87,12 +93,12 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     # Generate counterfactuals, coverage only
     start_time = Sys.time()
     if (cf_method == "MOCARF") {
-      cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "lik", max_changed = p,
-        conditional_mutator = "arf_multi", arf = instance$arf, psi = instance$psi, n_generations = 50L)
+      cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "lik", max_changed = max_feats_to_change,
+        conditional_mutator = "arf_multi", arf = instance$arf, psi = instance$psi, n_generations = 50L, return_all = TRUE)
     } else if (cf_method == "MOC") {
-      cac = MOCClassif$new(predictor = instance$predictor, n_generations = 50L, max_changed = p)
+      cac = MOCClassif$new(predictor = instance$predictor, n_generations = 50L, max_changed = max_feats_to_change, return_all = TRUE)
     } else if (cf_method == "ARF") {
-      cac = CountARFactualClassif$new(predictor = instance$predictor, max_feats_to_change = p,
+      cac = CountARFactualClassif$new(predictor = instance$predictor, max_feats_to_change = max_feats_to_change,
         weight_node_selector = c(weight_coverage, weight_proximity), arf = instance$arf, 
         n_synth = n_synth, node_selector = node_selector, psi = instance$psi)
     }
@@ -105,20 +111,21 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     cfexpobj$subset_to_valid()
     
     # Either eval based on Gower distance to train data or neg likelihood (ARF-based)
-    if (likelihood_based_eval) {
+    if (cf_method %in% c("ARF", "MOCARF")) {
       plausibility_measure = "lik"
-      measures = c("dist_x_interest", "no_changed", "neg_lik")
-    } else {
+      nondom_measures = c("dist_x_interest", "no_changed", "neg_lik")
+    } else if (cf_method %in% c("MOC")) {
       plausibility_measure = "gower"
-      measures = c("dist_x_interest", "no_changed")
+      nondom_measures = c("dist_x_interest", "no_changed", "dist_train")
     }
     
     # Evaluate single counterfactuals based on measures
-    res = cfexpobj$evaluate(arf = instance$arf, measures = c(measures, "dist_train"), 
+    eval_measures = c("dist_x_interest", "no_changed", "neg_lik", "dist_train")
+    res = cfexpobj$evaluate(arf = instance$arf, measures = eval_measures, 
       psi = instance$psi)
     
     # Aggregate eval of single counterfactuals by averaging
-    res_all = res[, lapply(.SD, mean), .SDcols = measures]
+    res_all = res[, lapply(.SD, mean), .SDcols = eval_measures]
     colnames(res_all) = paste0(colnames(res_all), "_all")
     res = cbind(res, res_all)
     
@@ -126,15 +133,16 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     if (complex_evaluation) {
       
       # Aggregate eval nondom only
-      res[, nondom := miesmuschel::rank_nondominated(-as.matrix(res[, ..measures]))$fronts == 1]
-      res_nondom = res[nondom == TRUE, lapply(.SD, mean), .SDcols = measures]
+      res[, nondom := FALSE]
+      res[miesmuschel:::nondominated(-as.matrix(res[, ..nondom_measures]))$front, nondom := TRUE]
+      res_nondom = res[nondom == TRUE, lapply(.SD, mean), .SDcols = eval_measures]
       colnames(res_nondom) = paste0(colnames(res_nondom), "_nondom")
       res = cbind(res, res_nondom)
       
       # Evaluate counterfactual set 
-      res_set = cfexpobj$evaluate_set(plausibility_measure = plausibility_measure, 
-        arf = instance$arf, psi = instance$psi)
-      res = cbind(res, res_set)
+      # res_set = cfexpobj$evaluate_set(plausibility_measure = plausibility_measure, 
+      #   arf = instance$arf, psi = instance$psi)
+      # res = cbind(res, res_set)
     }
     
     # Return all evaluation measures
@@ -176,56 +184,56 @@ unwrap(getJobPars())
 submitJobs()
 waitForJobs()
 
-# Get results -------------------------------------------------------------
-res =  flatten(ijoin(reduceResultsDataTable(), getJobPars()))
-
-res[, method := paste(node_selector, weight_coverage, weight_proximity)]
-res[, dataset := i]
-
-cols <- c("diversity", "no_nondom", 
-  "frac_nondom", "hypervolume", "dist_x_interest_all", "no_changed_all", 
-  "neg_lik_all", "dist_x_interest_nondom", "no_changed_nondom", 
-  "neg_lik_nondom")
-res_mean <- res[, lapply(.SD, mean), .SDcols = cols, by = .(method, dataset)]
-
-saveRDS(res, "res.Rds")
-saveRDS(res_mean, "res_mean.Rds")
-
-# Plot results -------------------------------------------------------------
-res_mean <- readRDS("res_mean.Rds")
-
-# Likelihood
-p1 = ggplot(res_mean, aes(x = method, y = log(neg_lik_all))) +
-  geom_boxplot() + 
-  theme_bw() + 
-  coord_flip()
-p2 = ggplot(res_mean, aes(x = method, y = log(neg_lik_nondom))) +
-  geom_boxplot() + 
-  theme_bw() + 
-  coord_flip()
-p1 / p2
-
-# Distance to x_interest
-p1 = ggplot(res_mean, aes(x = method, y = dist_x_interest_all)) +
-  geom_boxplot() + 
-  theme_bw() + 
-  coord_flip()
-p2 = ggplot(res_mean, aes(x = method, y = dist_x_interest_nondom)) +
-  geom_boxplot() + 
-  theme_bw() + 
-  coord_flip()
-p1 / p2
-
-# Number non-dominated 
-ggplot(res_mean, aes(x = method, y = no_nondom)) +
-  geom_boxplot() + 
-  theme_bw() + 
-  coord_flip()
-
-# Hypervolume
-ggplot(res_mean, aes(x = method, y = hypervolume)) +
-  geom_boxplot() + 
-  theme_bw() + 
-  coord_flip()
-
-
+# # Get results -------------------------------------------------------------
+# res =  flatten(ijoin(reduceResultsDataTable(), getJobPars()))
+# 
+# res[, method := paste(node_selector, weight_coverage, weight_proximity)]
+# res[, dataset := i]
+# 
+# cols <- c("diversity", "no_nondom", 
+#   "frac_nondom", "hypervolume", "dist_x_interest_all", "no_changed_all", 
+#   "neg_lik_all", "dist_x_interest_nondom", "no_changed_nondom", 
+#   "neg_lik_nondom")
+# res_mean <- res[, lapply(.SD, mean), .SDcols = cols, by = .(method, dataset)]
+# 
+# saveRDS(res, "res.Rds")
+# saveRDS(res_mean, "res_mean.Rds")
+# 
+# # Plot results -------------------------------------------------------------
+# res_mean <- readRDS("res_mean.Rds")
+# 
+# # Likelihood
+# p1 = ggplot(res_mean, aes(x = method, y = log(neg_lik_all))) +
+#   geom_boxplot() + 
+#   theme_bw() + 
+#   coord_flip()
+# p2 = ggplot(res_mean, aes(x = method, y = log(neg_lik_nondom))) +
+#   geom_boxplot() + 
+#   theme_bw() + 
+#   coord_flip()
+# p1 / p2
+# 
+# # Distance to x_interest
+# p1 = ggplot(res_mean, aes(x = method, y = dist_x_interest_all)) +
+#   geom_boxplot() + 
+#   theme_bw() + 
+#   coord_flip()
+# p2 = ggplot(res_mean, aes(x = method, y = dist_x_interest_nondom)) +
+#   geom_boxplot() + 
+#   theme_bw() + 
+#   coord_flip()
+# p1 / p2
+# 
+# # Number non-dominated 
+# ggplot(res_mean, aes(x = method, y = no_nondom)) +
+#   geom_boxplot() + 
+#   theme_bw() + 
+#   coord_flip()
+# 
+# # Hypervolume
+# ggplot(res_mean, aes(x = method, y = hypervolume)) +
+#   geom_boxplot() + 
+#   theme_bw() + 
+#   coord_flip()
+# 
+# 
