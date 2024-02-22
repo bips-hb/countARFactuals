@@ -88,6 +88,9 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     #'  if set to 'gower_c', a C-based more efficient version of Gower's distance is used.
     #'  A function must have three arguments  `x`, `y`, and `data` and should
     #'  return a `double` matrix with `nrow(x)` rows and maximum `nrow(y)` columns.
+    #' @param return_all (`logical(1)`) \cr
+    #' Whether to return all generated candidates over all generations (TRUE) or only 
+    #' the nondominated ones (FALSE)
     #' @param quiet (`logical(1)`)\cr 
     #'  Should information about the optimization status be hidden? Default is `FALSE`.
 
@@ -96,7 +99,7 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
                           p_mut = 0.73, p_mut_gen = 0.5, p_mut_use_orig = 0.4, k = 1L, weights = NULL, 
                           lower = NULL, upper = NULL, init_strategy = "icecurve",
                           conditional_mutator = NULL, plausibility_measure = "gower", arf = NULL, psi = NULL,
-                          distance_function = "gower", quiet = FALSE) {
+                          distance_function = "gower", return_all = FALSE, quiet = FALSE) {
       
       if (is.character(distance_function)) {
         if (distance_function == "gower") {
@@ -133,6 +136,7 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       assert_choice(conditional_mutator, choices = c("arf_single", "arf_multi", "ctree"), null.ok = TRUE)
       assert_choice(plausibility_measure, choices = c("gower", "lik"))
       assert_class(arf, "ranger", null.ok = TRUE)
+      assert_logical(return_all, null.ok = FALSE)
       assert_flag(quiet)
       
       if (!is.null(conditional_mutator)) {
@@ -187,6 +191,7 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       private$plausibility_measure = plausibility_measure
       private$arf = arf
       private$psi = psi
+      private$return_all = return_all
       private$quiet = quiet
     },
     
@@ -269,6 +274,7 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
     plausibility_measure = NULL,
     arf = NULL,
     psi = NULL,
+    return_all = NULL,
     quiet = NULL,
 
     run = function() {
@@ -319,10 +325,14 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
         plausibility_measure = private$plausibility_measure,
         arf = private$arf,
         ref_point = private$ref_point,
+        return_all = private$return_all,
         quiet = private$quiet
       )
-
-      unique(private$.optimizer$result[, names(private$x_interest), with = FALSE])
+      if (!private$return_all) {
+        unique(private$.optimizer$result[, names(private$x_interest), with = FALSE])  
+      } else {
+        unique(private$.optimizer$archive$data[, names(private$x_interest), with = FALSE])  
+      }
     },
 
     print_parameters = function() {

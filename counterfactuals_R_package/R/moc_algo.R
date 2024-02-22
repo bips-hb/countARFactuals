@@ -1,7 +1,7 @@
 moc_algo = function(predictor, x_interest, pred_column, target, param_set, lower, upper, sdevs_num_feats, 
   epsilon,  fixed_features, max_changed, mu, termination_crit, n_generations, p_rec, p_rec_gen,
   p_mut, p_mut_gen, p_mut_use_orig, k, weights, init_strategy, distance_function, cond_sampler = NULL, 
-  plausibility_measure = NULL, ref_point, arf = NULL, quiet = TRUE) {
+  plausibility_measure = NULL, ref_point, arf = NULL, return_all = FALSE, quiet = TRUE) {
   
   codomain = ParamSet$new(list(
     ParamDbl$new("dist_target", tags = "minimize"),
@@ -154,24 +154,32 @@ moc_algo = function(predictor, x_interest, pred_column, target, param_set, lower
   }
   bbotk::assign_result_default(oi)
   
-  # Re-attach fixed features
-  if (!is.null(fixed_features)) {
-    oi$result[, (fixed_features) := x_interest[, fixed_features, with = FALSE]]
+  if (!return_all) {
+    results = oi$result
+  } else {
+    results = oi$archive$data
   }
   
-  # Transform factor column w.r.t to original data
-  factor_cols = names(which(sapply(predictor$data$X, is.factor)))
-  for (factor_col in factor_cols) {
-    fact_col_pred = predictor$data$X[[factor_col]]
-    value =  factor(oi$result[[factor_col]], levels = levels(fact_col_pred), ordered = is.ordered(fact_col_pred))
-    oi$result[, (factor_col) := value]
-  }
-  
-  int_cols = names(which(sapply(predictor$data$X, is.integer)))
-  if (length(int_cols) > 0L) {
-    oi$result[, (int_cols) := lapply(.SD, as.integer), .SDcols = int_cols]
-  }
-  setorder(oi$result, "dist_target")
-  oi
+    # Re-attach fixed features
+    if (!is.null(fixed_features)) {
+      results[, (fixed_features) := x_interest[, fixed_features, with = FALSE]]
+    }
+    
+    # Transform factor column w.r.t to original data
+    factor_cols = names(which(sapply(predictor$data$X, is.factor)))
+    for (factor_col in factor_cols) {
+      fact_col_pred = predictor$data$X[[factor_col]]
+      value =  factor(results[[factor_col]], levels = levels(fact_col_pred), ordered = is.ordered(fact_col_pred))
+      results[, (factor_col) := value]
+    }
+    
+    int_cols = names(which(sapply(predictor$data$X, is.integer)))
+    if (length(int_cols) > 0L) {
+      results[, (int_cols) := lapply(.SD, as.integer), .SDcols = int_cols]
+    }
+    setorder(results, "dist_target")
+    
+    oi
+ 
 }
 
