@@ -4,20 +4,23 @@ import pandas as pd
 import pyro.distributions as dist
 import torch
 
-import dgp
+import python.dgp_v2 as dgp_v2
+import python.dgp as dgp_v1
 import illustrative
 
-dgp_names = ['bn_5', 'bn_10', 'bn_50', 'bn_100', 'cassini', 'pawelczyk', 'two_sines']
+dgp_names = ['bn_5', 'bn_10', 'bn_20', 'bn_10_v2', 'bn_50', 'bn_100', 'cassini', 'pawelczyk', 'two_sines']
 illustrative_dgps = {
     'pawelczyk': illustrative.ModelPawelczyk(),
     'two_sines': illustrative.TwoSines(),
     'cassini': illustrative.Cassini()
 }
+v2_dgps = ['bn_10_v2', 'bn_20', 'bn_100']
 
 
 dgpname = 'bn_5'
 cf_path = '../cfs/bn5_cfs.csv'
 dgps_path = 'synthetic/dgps/'
+dgps_v2_path = 'synthetic_v2/dgps/'
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dgpname')
@@ -52,7 +55,10 @@ else:
         raise ValueError('DGP path does not exist')
     if not dgps_path.endswith('/'):
         raise ValueError('cf path must end with / (should be a folder)')
-    model = dgp.DGP.load(dgps_path, dgpname, cfs.shape[0])
+    if dgpname in v2_dgps:
+        model = dgp_v2.DGP.load(dgps_v2_path, dgpname, cfs.shape[0])
+    else:
+        model = dgp_v1.DGP.load(dgps_path, dgpname, cfs.shape[0])
     log_probs_0 = model.log_prob(cfss_y[0])
     log_probs_1 = model.log_prob(cfss_y[1])
     log_probs = torch.logsumexp(torch.stack([log_probs_0, log_probs_1]), dim=0)
