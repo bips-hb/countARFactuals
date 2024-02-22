@@ -7,47 +7,42 @@
     <nodes>
       <node id="y" label="y" />
       <node id="x1" label="x1" />
-      <node id="x3" label="x3" />
       <node id="x2" label="x2" />
       <node id="x4" label="x4" />
+      <node id="x3" label="x3" />
       <node id="x5" label="x5" />
-      <node id="x7" label="x7" />
       <node id="x6" label="x6" />
+      <node id="x7" label="x7" />
       <node id="x8" label="x8" />
       <node id="x9" label="x9" />
     </nodes>
     <edges>
-      <edge source="y" target="x3" id="0" />
+      <edge source="y" target="x1" id="0" />
       <edge source="y" target="x4" id="1" />
-      <edge source="y" target="x5" id="2" />
-      <edge source="y" target="x8" id="3" />
-      <edge source="y" target="x1" id="4" />
+      <edge source="y" target="x3" id="2" />
+      <edge source="y" target="x6" id="3" />
+      <edge source="y" target="x8" id="4" />
       <edge source="y" target="x2" id="5" />
-      <edge source="y" target="x9" id="6" />
+      <edge source="y" target="x5" id="6" />
       <edge source="x1" target="x3" id="7" />
-      <edge source="x1" target="x4" id="8" />
-      <edge source="x1" target="x5" id="9" />
-      <edge source="x1" target="x7" id="10" />
-      <edge source="x1" target="x8" id="11" />
-      <edge source="x1" target="x9" id="12" />
-      <edge source="x3" target="x5" id="13" />
-      <edge source="x3" target="x7" id="14" />
-      <edge source="x3" target="x6" id="15" />
-      <edge source="x3" target="x8" id="16" />
-      <edge source="x3" target="x9" id="17" />
-      <edge source="x2" target="x4" id="18" />
-      <edge source="x2" target="x5" id="19" />
-      <edge source="x2" target="x7" id="20" />
-      <edge source="x2" target="x8" id="21" />
-      <edge source="x2" target="x9" id="22" />
-      <edge source="x4" target="x7" id="23" />
-      <edge source="x4" target="x8" id="24" />
-      <edge source="x5" target="x7" id="25" />
-      <edge source="x5" target="x8" id="26" />
-      <edge source="x5" target="x9" id="27" />
-      <edge source="x7" target="x8" id="28" />
-      <edge source="x6" target="x9" id="29" />
-      <edge source="x8" target="x9" id="30" />
+      <edge source="x1" target="x5" id="8" />
+      <edge source="x1" target="x7" id="9" />
+      <edge source="x2" target="x4" id="10" />
+      <edge source="x2" target="x6" id="11" />
+      <edge source="x2" target="x8" id="12" />
+      <edge source="x2" target="x9" id="13" />
+      <edge source="x4" target="x5" id="14" />
+      <edge source="x4" target="x6" id="15" />
+      <edge source="x4" target="x7" id="16" />
+      <edge source="x4" target="x9" id="17" />
+      <edge source="x3" target="x7" id="18" />
+      <edge source="x3" target="x8" id="19" />
+      <edge source="x5" target="x6" id="20" />
+      <edge source="x5" target="x7" id="21" />
+      <edge source="x5" target="x8" id="22" />
+      <edge source="x6" target="x9" id="23" />
+      <edge source="x7" target="x8" id="24" />
+      <edge source="x8" target="x9" id="25" />
     </edges>
   </graph>
 </gexf>

@@ -12,6 +12,7 @@ import warnings
 import argparse
 import json
 import inspect
+from visualize import plot_corr, plot_pairs, get_savepath
 
 
 
@@ -20,24 +21,26 @@ AGG_FNCS = {
     'SUM': lambda pv : pv.sum(-1)
 }
 
-def get_random_agg_fnc(d, order=3, ii_extra=None, ii_extra_p=0.1):
+def get_random_agg_fnc(d, order=2, ii_extra=None, ii_extra_p=0.1):
     # assumes -1 of last dimension is bias
     weights = dist.Uniform(-1, 1.0).sample((d,))
     if d > 2:
         weights = weights + dist.Binomial(1, 3/d).sample((d,)) * 3
     if ii_extra is not None:
         if random.random() < ii_extra_p:
-            weights[ii_extra] += dist.Uniform(1.0, 4.0).sample((1,))[0]
+            weights[ii_extra] += dist.Uniform(3.0, 4.0).sample((1,))[0]
     weights = weights / weights.abs().sum()
 
-    polynomial_coeffs = dist.Uniform(-1, 1).sample((order,))
-    def polynomial(inp):
+    polynomial_coeffs = dist.Uniform(-1, 1).sample((order + 1,))
+    def polynomial(inp, order, polynomial_coeffs):
         out = torch.zeros_like(inp)
-        for ii in range(order):
+        for ii in range(order + 1):
             out += polynomial_coeffs[ii] * inp**ii
+        if torch.isnan(out).any():
+            raise RuntimeError('NaN in polynomial')
         return out
     def fnc(pv):
-        return polynomial((weights * pv).sum(-1))
+        return polynomial(torch.sin((weights * pv).sum(-1)), order, polynomial_coeffs)
     return fnc
 
 # functions that take aggregation function and parent values and return parametrized distribution
@@ -169,7 +172,7 @@ class DGP:
             pars = list(dgp.get_parents(node))
             d = len(pars)
             ii_extra = None if 'y' not in pars else pars.index('y')
-            agg_fnc = get_random_agg_fnc(d, order=3, ii_extra=ii_extra, ii_extra_p=1/len(dgp.nodes))
+            agg_fnc = get_random_agg_fnc(d, order=2, ii_extra=ii_extra, ii_extra_p=min(0.9, 3/len(dgp.nodes)))
             agg_fncs[node] = agg_fnc
             if node in cat_nodes:
                 dist_fncs[node] = DIST_FNCS['BERN']
@@ -455,7 +458,7 @@ def model_gen(d, p, batch_size, it=0, lim=100, proportion_categorical=0.2):
         else:
             raise RuntimeError('Could not find a good model after {} iterations.'.format(lim))
         
-def save_dgp_and_data(dgp, path, dgpname, overwrite=False):
+def save_dgp_and_data(dgp, path, dgpname, overwrite=False, show_plots=True):
     print('trying to save ' + dgpname + ' to ' + path)
     dgp.sample()
     values = dgp.get_values(as_df=True)
@@ -466,12 +469,15 @@ def save_dgp_and_data(dgp, path, dgpname, overwrite=False):
         values.to_csv(path + dgpname + '.csv', index=False)
     else:
         warnings.warn('{}.csv already exists.'.format(dgpname))
-
     # check whether loded DGP gives same likelihoods
     dgp_check = DGP.load(path + 'dgps/', dgpname, dgp.batch_size)
     log_prob_check = dgp_check.log_prob(values, return_df=False)
     log_prob = dgp.log_prob(values, return_df=False)
     assert sum(log_prob != log_prob_check) == 0
+
+    savepath_visuals = get_savepath(path)
+    plot_corr(values, dgpname, savepath=savepath_visuals, show_plots=show_plots)
+    plot_pairs(values, dgpname, savepath=savepath_visuals, show_plots=show_plots)   
 
 
 ## BN_1 graph
@@ -539,7 +545,8 @@ if __name__ == '__main__':
 
     gen_dict = {
         # 'bn_10' : (10, 0.5, 0.2),
-        'bn_10_v2' : (10, 0.6, 0.3),
+        # 'bn_10_v2' : (10, 0.6, 0.3),
+        'bn_5_v2' : (5, 0.8, 0.3),
         # 'bn_20' : (20, 0.4, 0.3),
         # 'bn_100' : (100, 0.5, 0.5),
     }
@@ -557,6 +564,8 @@ if __name__ == '__main__':
         except Exception as e:
             print(e)
             warnings.warn('Could not save {}'.format(name))
+            from visualize import plot_corr, plot_pairs
+            plot_pairs(values, name)
             x = input('Continue saving? (y/n)')
             if x == 'y':
                 save_dgp_and_data(dgp, 'python/synthetic_v2/', name, overwrite=True)

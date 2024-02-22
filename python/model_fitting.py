@@ -5,9 +5,15 @@ from sklearn.model_selection import GridSearchCV
 import scipy.stats as stats
 import argparse
 import numpy as np
+from visualize import plot_pairs, get_savepath
 
 
-names = ['bn_5', 'bn_100', 'bn_10', 'bn_50', 'cassini', 'pawelczyk', 'two_sines']
+names = ['bn_5', 'bn_100', 'bn_10', 'bn_50', 'cassini', 'pawelczyk', 'two_sines', 'bn_20', 'bn_10_v2', 'bn_5_v2']
+
+# loadpath = 'python/synthetic_v2/'
+# data_name = 'bn_5_v2'
+# train_size = 5000
+# x_interest_size = 50
 
 parser = argparse.ArgumentParser()
 parser.add_argument('loadpath')
@@ -24,7 +30,7 @@ train_size = args.train_size
 x_interest_size = args.x_interest_size
 
 if 'bn_' in data_name:
-    df = pd.read_csv(loadpath + '{}.csv'.format(data_name), index_col=0)
+    df = pd.read_csv(loadpath + '{}.csv'.format(data_name))
 else:
     df = pd.read_csv(loadpath + '{}.csv'.format(data_name))
 
@@ -38,7 +44,21 @@ assert df.shape[0] >= train_size + x_interest_size
 df_train = df.iloc[:train_size]
 df_rest = df.iloc[train_size:2*train_size]
 df_rest_filtered = df_rest[df_rest['y'] == 0]
-df_interest = df_rest_filtered.sample(x_interest_size)
+
+def sample_interest(x_interest_size, candidates, background):
+    df_interest = candidates.sample(x_interest_size)
+    foreground = df_interest.copy()
+    foreground['y'] = 'cf'
+    df_visualize = pd.concat([background, foreground])
+    plot_pairs(df_visualize, data_name, sample=False)
+    if input('Happy with CFs (y/n)') == 'y':
+        plot_pairs(df_visualize, data_name, sample=False, savepath=get_savepath(loadpath), show=False)
+        return df_interest
+    else:
+        return sample_interest(x_interest_size, candidates, background)
+
+
+df_interest = sample_interest(x_interest_size, df_rest_filtered, df_rest.iloc[:200])
 
 X_train, y_train = df_train.drop('y', axis=1), df_train['y']
 X_rest, y_rest = df_rest.drop('y', axis=1), df_rest['y']

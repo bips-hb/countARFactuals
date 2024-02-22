@@ -1,6 +1,6 @@
 
-#python stuff
-*/__pycache__/*
+# python stuff
+python/__pycache__/
 
 inst/doc
 /doc/
