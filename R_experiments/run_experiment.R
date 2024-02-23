@@ -23,16 +23,15 @@ complex_evaluation = TRUE
 
 # Datasets
 datanams = c("pawelczyk", "cassini", "two_sines",
-  paste("bn", c(5, 10, 20, 50), sep = "_"), 
-  paste("bn", c(5, 10), "v2", sep = "_"))
+  "bn_20", paste("bn", c(5, 10, 50), "v2", sep = "_"))
 
 # Registry ----------------------------------------------------------------
-reg_name = "evaluate_simulation_22_02"
+reg_name = "evaluate_simulation_23_02"
 if (!file.exists("registries")) dir.create("registries")
 reg_dir = file.path("registries", reg_name)
 unlink(reg_dir, recursive = TRUE)
 reg = makeExperimentRegistry(file.dir = reg_dir, seed = 42, 
-  packages = c("mlr3verse", "mlr3oml", "iml", "arf", 
+  packages = c("mlr3verse", "mlr3oml", "iml", "arf", "tictoc",
     "counterfactuals", "xgboost", "data.table", "foreach"), 
   source = c("R_experiments/utils_experiment.R"))
 if (multicore) {
@@ -42,7 +41,7 @@ if (multicore) {
 # Problems -----------------------------------------------------------
 get_data = function(data, job, id) {
   # get model & data
-  if (id %in% c("bn_20","bn_5_v2", "bn_10_v2")) {
+  if (id %in% c("bn_20","bn_5_v2", "bn_10_v2", "bn_50_v2")) {
     data_path = "python/synthetic_v2/"
   }  else {
     data_path = "python/synthetic/"
@@ -91,21 +90,28 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
       desired_prob = c(0, 0.5)
     }
     # Generate counterfactuals, coverage only
-    start_time = Sys.time()
+    tic()
     if (cf_method == "MOCARF") {
       cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "lik", max_changed = max_feats_to_change,
-        conditional_mutator = "arf_multi", arf = instance$arf, psi = instance$psi, n_generations = 50L, return_all = TRUE)
+        conditional_mutator = "arf_multi", arf = instance$arf, psi = instance$psi, 
+        n_generations = 50L, return_all = TRUE, distance_function = "gower_c")
     } else if (cf_method == "MOC") {
-      cac = MOCClassif$new(predictor = instance$predictor, n_generations = 50L, max_changed = max_feats_to_change, return_all = TRUE)
+      cac = MOCClassif$new(predictor = instance$predictor, n_generations = 50L, 
+        max_changed = max_feats_to_change, return_all = TRUE, distance_function = "gower_c")
     } else if (cf_method == "ARF") {
       cac = CountARFactualClassif$new(predictor = instance$predictor, max_feats_to_change = max_feats_to_change,
         weight_node_selector = c(weight_coverage, weight_proximity), arf = instance$arf, 
         n_synth = n_synth, node_selector = node_selector, psi = instance$psi)
+    } else if (cf_method == "NICE") {
+      cac = NICEClassif$new(predictor = instance$predictor, optimization = "plausibility", x_nn_correct = FALSE,
+        return_multiple = TRUE, finish_early = FALSE, distance_function = "gower_c")
+    } else if (cf_method == "WhatIf") {
+      cac = WhatIfClassif$new(predictor = instance$predictor, n_counterfactuals = 50*20L, distance_function = "gower_c")
     }
     cfexpobj = cac$find_counterfactuals(x_interest, 
       desired_class = target_class, 
       desired_prob = desired_prob)
-    end_time = Sys.time()
+    exectime = toc()
     
     # Subset to only valid counterfactuals
     cfexpobj$subset_to_valid()
@@ -117,6 +123,12 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     } else if (cf_method %in% c("MOC")) {
       plausibility_measure = "gower"
       nondom_measures = c("dist_x_interest", "no_changed", "dist_train")
+    } else if (cf_method == "NICE") {
+      plausibility_measure = "reward"
+      nondom_measures = c("dist_x_interest", "no_changed", "reward")
+    } else if (cf_method == "WhatIf") {
+      plausibility_measure = "gower"
+      nondom_measures = c("dist_x_interest", "no_changed")
     }
     
     # Evaluate single counterfactuals based on measures
@@ -134,7 +146,14 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
       
       # Aggregate eval nondom only
       res[, nondom := FALSE]
+      
+      if (cf_method == "NICE") {
+        archive = unique(rbindlist(cac$archive))[, pred := NULL]
+        res = merge(res, archive, by = instance$predictor$data$feature.names)
+        res[, reward := -reward]
+      }
       res[miesmuschel:::nondominated(-as.matrix(res[, ..nondom_measures]))$front, nondom := TRUE]
+      if (cf_method == "NICE") res = res[, reward := NULL]
       res_nondom = res[nondom == TRUE, lapply(.SD, mean), .SDcols = eval_measures]
       colnames(res_nondom) = paste0(colnames(res_nondom), "_nondom")
       res = cbind(res, res_nondom)
@@ -147,7 +166,7 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     
     # Return all evaluation measures
     res[, id := idx]
-    res[, runtime := as.numeric(end_time - start_time)]
+    res[, runtime := exectime$toc - exectime$tic]
     res
   }
 }
@@ -168,9 +187,16 @@ algo_design = list(
     ## MOCARF, ARF sampler + plausibility based on lik
     data.frame(n_synth = "NA", node_selector = "coverage", 
       weight_coverage = 0, weight_proximity = 0, cf_method = c("MOCARF")),
-    ## Standard ARF without conditional sampler + plausibility based on gower
+    ## Standard MOC without conditional sampler + plausibility based on gower
     data.frame(n_synth = "NA", node_selector = "NA", 
-      weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("MOC")))
+      weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("MOC")),
+   ## NICE with plausibility
+  data.frame(n_synth = "NA", node_selector = "NA", 
+    weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("NICE")),
+  ## WhatIf with plausibility
+    data.frame(n_synth = "NA", node_selector = "NA", 
+      weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("WhatIf"))
+  )
 )
 
 addExperiments(prob_design, algo_design, repls = repls)
