@@ -1,0 +1,2 @@
+cfs/**.csv filter=lfs diff=lfs merge=lfs -text
+cfs/** filter=lfs diff=lfs merge=lfs -text
