@@ -15,7 +15,7 @@ illustrative_dgps = {
     'two_sines': illustrative.TwoSines(),
     'cassini': illustrative.Cassini()
 }
-v2_dgps = ['bn_10_v2', 'bn_20', 'bn_100', 'bn_5_v2', 'bn_10_v2']
+v2_dgps = ['bn_10_v2', 'bn_20', 'bn_100', 'bn_5_v2', 'bn_10_v2', 'bn_50_v2']
 dgp_names = [] + v1_dgps + list(illustrative_dgps.keys()) + v2_dgps
 
 dgps_root = 'python/synthetic/'

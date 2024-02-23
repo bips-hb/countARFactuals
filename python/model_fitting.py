@@ -8,7 +8,7 @@ import numpy as np
 from visualize import plot_pairs, get_savepath
 
 
-names = ['bn_5', 'bn_100', 'bn_10', 'bn_50', 'cassini', 'pawelczyk', 'two_sines', 'bn_20', 'bn_10_v2', 'bn_5_v2']
+names = ['bn_5', 'bn_100', 'bn_10', 'bn_50', 'cassini', 'pawelczyk', 'two_sines', 'bn_20', 'bn_10_v2', 'bn_5_v2', 'bn_50_v2']
 
 # loadpath = 'python/synthetic/'
 # data_name = 'bn_5'
