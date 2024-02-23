@@ -1,11 +1,13 @@
 # --- VISUALIZE RESULTS ----
-
+library(data.table)
 library(batchtools)
 library(ggplot2)
 library(reshape2)
 
 
-eval_columns = c("dist_x_interest", "no_changed", "dist_train", "dist_x_interest_all", "no_changed_all", "log_probs")
+eval_columns = c("dist_x_interest", "no_changed", "neg_lik", "dist_train", "dist_x_interest_all", "no_changed_all", "log_probs")
+
+csv_dir = "cfs/23_02"
 
 # Get results -------------------------------------------------------------
 
@@ -13,10 +15,10 @@ res = NULL
 
 
 
-files = list.files("cfs/")
+files = list.files(csv_dir)
 files = files[grepl(files, pattern = "log_probs")]
 for (file in files) {
-	res = rbind(res, fread(file = file.path("cfs", "R", file), header = TRUE))
+	res = rbind(res, fread(file = file.path(csv_dir, file), header = TRUE))
 }
 
 
@@ -28,8 +30,8 @@ res[, method := ifelse(cf_method == "ARF", paste(cf_method, n_synth), cf_method)
 #   "neg_lik_nondom")
 res_mean <- res[, lapply(.SD, mean), .SDcols = eval_columns, by = .(method, dataset, id)]
 
-# saveRDS(res, "res.Rds")
-# saveRDS(res_mean, "res_mean.Rds")
+saveRDS(res, "R_experiments/res.Rds")
+saveRDS(res_mean, "R_experiments/res_mean.Rds")
 
 # Plot results -------------------------------------------------------------
 # res_mean <- readRDS("res_mean.Rds")
@@ -78,5 +80,4 @@ plot2 = ggplot(time_res, aes(x = method, y = as.numeric(time.running), fill = me
 plot2
 
 
-ggsave(filename = "R_experiments/results_study.png", plot = plot1, dpi = 200, width = 8, height = 8)
-
+ggsave(filename = "R_experiments/runtimes.png", plot = plot2, dpi = 200, width = 4, height = 4)
