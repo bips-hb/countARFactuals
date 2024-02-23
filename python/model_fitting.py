@@ -10,8 +10,8 @@ from visualize import plot_pairs, get_savepath
 
 names = ['bn_5', 'bn_100', 'bn_10', 'bn_50', 'cassini', 'pawelczyk', 'two_sines', 'bn_20', 'bn_10_v2', 'bn_5_v2']
 
-# loadpath = 'python/synthetic_v2/'
-# data_name = 'bn_5_v2'
+# loadpath = 'python/synthetic/'
+# data_name = 'bn_5'
 # train_size = 5000
 # x_interest_size = 50
 
@@ -52,7 +52,7 @@ def sample_interest(x_interest_size, candidates, background):
     df_visualize = pd.concat([background, foreground])
     plot_pairs(df_visualize, data_name, sample=False)
     if input('Happy with CFs (y/n)') == 'y':
-        plot_pairs(df_visualize, data_name, sample=False, savepath=get_savepath(loadpath), show=False)
+        plot_pairs(df_visualize, data_name, sample=False, savepath=get_savepath(loadpath), show_plot=False)
         return df_interest
     else:
         return sample_interest(x_interest_size, candidates, background)
