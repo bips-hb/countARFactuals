@@ -317,8 +317,18 @@ class DGP:
         """Gets the log prob of a node given the values of its parents.
         The values of node and parents are stored in the DGP 
         and can be updated using the set_values method."""
-        log_likelihood = self.dists[node].log_prob(self.values[node])
-        return log_likelihood
+        d = self.dists[node]
+        valid = d.support.check(self.values[node])
+        if not valid.all():
+            warnings.warn('Out of support values encountered for node {}'.format(node))
+            values_copy = self.values[node].clone()
+            values_copy[~valid] = d.support.lower_bound
+            log_likelihood = d.log_prob(values_copy)
+            log_likelihood[~valid] = -float('inf')
+            return log_likelihood
+        else:
+            log_likelihood = d.log_prob(self.values[node])
+            return log_likelihood
 
     def log_prob(self, data, return_df=False):
         """Calculates the log likelihood of the data."""
