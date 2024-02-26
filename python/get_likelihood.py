@@ -54,7 +54,7 @@ if os.path.isdir(cf_path):
     competitors = [name for name in dgp_names if dgpname in name and name != dgpname]
     # get all files with dgpname in the name and ending in .csv
     for file in os.listdir(cf_path):
-        if file.endswith('.csv') and dgpname in file and not any([comp in file for comp in competitors]):
+        if file.endswith('.csv') and dgpname in file and not any([comp in file for comp in competitors]) and not 'with_log_probs.csv' in file:
             cfs_files.append(cf_path + file)
 else:
     if not cf_path.endswith('.csv'):
