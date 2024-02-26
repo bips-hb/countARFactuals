@@ -23,20 +23,21 @@ dgps_v2_root = 'python/synthetic_v2/'
 dgps_path = dgps_root + 'dgps/'
 dgps_v2_path = dgps_v2_root + '/dgps/'
 
-dgpname = 'bn_50'
-cf_path = 'cfs/23_02/'
-p = False
+# dgpname = 'bn_50'
+# cf_path = 'cfs/23_02/'
+# p = False
 
-# parser = argparse.ArgumentParser()
-# parser.add_argument('dgpname') # name of the DGP
-# parser.add_argument('cf_path') # path to the counterfactuals
-# parser.add_argument('-p', action='store_true') # whether to show plots
+parser = argparse.ArgumentParser()
+parser.add_argument('dgpname') # name of the DGP
+parser.add_argument('cf_path') # path to the counterfactuals
+parser.add_argument('-p', action='store_true') # whether to show plots
 
 
-# args = parser.parse_args()
-# dgpname = args.dgpname
-# cf_path = args.cf_path
-# p = args.p
+args = parser.parse_args()
+dgpname = args.dgpname
+cf_path = args.cf_path
+p = args.p
+
 # check whether v2 dgp
 if dgpname in v2_dgps:
     dgps_path = dgps_v2_path
