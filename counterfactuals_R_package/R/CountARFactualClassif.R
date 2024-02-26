@@ -164,8 +164,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
         }
       }
       
-      synth = data.table()
-      for (i in 1:private$n_iterations) {
+      evidence <- rbindlist(lapply(1:private$n_iterations, function(i) {
         feats_not_to_change = sample(seq(
           private$predictor$data$n.features - private$max_feats_to_change, 
           private$predictor$data$n.features - 1L), size = 1L)
@@ -185,17 +184,15 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
           cols = sample(private$predictor$data$feature.names, 
             size = feats_not_to_change)
         }
-        fixed = private$x_interest[, ..cols]
-        if (feats_not_to_change > 0) {
-         evidence = arf:::prep_evi(psi, fixed)
-        } else {
-          evidence = NULL
-        }
-        evidence = rbind(evidence, data.table(variable = "yhat", 
-          value = c(min(private$desired_prob), max(private$desired_prob)), 
-          relation = c(">=", "<=")))
-        synth = rbind(synth, forge(psi, n_synth = private$n_synth, evidence = evidence))
-      }
+        fixed = copy(private$x_interest)
+        na_cols <- setdiff(colnames(fixed), cols)
+        fixed[, (na_cols) := NA]
+        evidence = fixed
+        evidence = data.table(evidence, 
+                              yhat = paste0("(", min(private$desired_prob), ",", 
+                                            max(private$desired_prob), ")"))
+      }))
+      synth <- forge(psi, n_synth = private$n_synth, condition = evidence)
       synth[, yhat := NULL]
       
       # Recode factors to original factor levels
