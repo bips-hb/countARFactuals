@@ -28,8 +28,26 @@ for (file in files) {
 res = res[, log_probs := exp(log_probs)]
 # ~2000
 ###################
-
 res[, method := ifelse(cf_method == "ARF", paste(cf_method, n_synth), cf_method)]
+
+# res = res[, plausibility := 1-log_probs]
+# eval_measures = c("dist_x_interest", "no_changed", "plausibility")
+# hv_dat = copy(res)[, c(eval_measures, "method", "dataset", "id"), with = FALSE]
+# 
+# get_hv = function(x) {
+# 	if (nrow(x) > 0) {
+#         res = miesmuschel::domhv(fitnesses = -as.matrix(rbind(x)),
+#           nadir = -c(1, 1, 1)
+#         )
+# 	} else {res = -Inf}
+#     return(res)
+# }
+# 
+# hv = hv_dat %>% 
+#       group_by(method, dataset, id) %>%
+#       group_modify(~ data.frame(cbind(.x, "dom_hv" = get_hv(.x))))
+# hv_dat[, hv := get_hv(..eval_measures), by = .(method, dataset, id)]
+
 res_mean <- res[, lapply(.SD, mean), .SDcols = eval_columns, by = .(method, dataset, id)]
 
 res_log_probs_nondom = res[nondom == TRUE, lapply(.SD, mean), .SDcols = "log_probs", by = .(method, dataset, id)]
@@ -73,7 +91,7 @@ plot_results = function(data, evaluation_measures = NULL, remove_strip_x = FALSE
     facet_grid(variable ~ dataset, scales = "free_x") + 
     theme_bw() +
     scale_color_brewer(palette="BrBG") + 
-    scale_y_continuous(breaks = pretty_breaks(n = 3)) + 
+    # scale_y_continuous(breaks = pretty_breaks(n = 3)) + 
     theme(legend.position="none", 
       axis.title.x = element_blank(), 
       axis.title.y = element_blank(), 
