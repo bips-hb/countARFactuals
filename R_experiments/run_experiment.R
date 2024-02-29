@@ -26,7 +26,7 @@ datanams = c("pawelczyk", "cassini", "two_sines",
   "bn_20", paste("bn", c(5, 10, 50), "v2", sep = "_"))
 
 # Registry ----------------------------------------------------------------
-reg_name = "evaluate_simulation_23_02"
+reg_name = "test"
 if (!file.exists("registries")) dir.create("registries")
 reg_dir = file.path("registries", reg_name)
 unlink(reg_dir, recursive = TRUE)
@@ -69,8 +69,8 @@ addProblem(name = "sim", fun = get_data, seed = 43)
 
 # Algorithms -----------------------------------------------------------
 cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity, n_synth, node_selector, ...) {
-  
   target_class = "pred"
+  if (n_synth == "NA") n_synth = NA
   n_synth = as.numeric(n_synth)
   
   p = instance$predictor$data$n.features
@@ -98,6 +98,10 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     } else if (cf_method == "MOC") {
       cac = MOCClassif$new(predictor = instance$predictor, n_generations = 50L, 
         max_changed = max_feats_to_change, return_all = TRUE, distance_function = "gower_c")
+    } else if (cf_method == "MOCCTREE") {
+      cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "gower", max_changed = max_feats_to_change,
+        conditional_mutator = "ctree", arf = instance$arf, psi = instance$psi, 
+        n_generations = 50L, return_all = TRUE, distance_function = "gower_c")
     } else if (cf_method == "ARF") {
       cac = CountARFactualClassif$new(predictor = instance$predictor, max_feats_to_change = max_feats_to_change,
         weight_node_selector = c(weight_coverage, weight_proximity), arf = instance$arf, 
@@ -112,7 +116,7 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
       desired_class = target_class, 
       desired_prob = desired_prob)
     exectime = toc()
-    
+
     # Subset to only valid counterfactuals
     cfexpobj$subset_to_valid()
     
@@ -120,7 +124,7 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     if (cf_method %in% c("ARF", "MOCARF")) {
       plausibility_measure = "lik"
       nondom_measures = c("dist_x_interest", "no_changed", "neg_lik")
-    } else if (cf_method %in% c("MOC")) {
+    } else if (cf_method %in% c("MOC", "MOCCTREE")) {
       plausibility_measure = "gower"
       nondom_measures = c("dist_x_interest", "no_changed", "dist_train")
     } else if (cf_method == "NICE") {
@@ -190,11 +194,14 @@ algo_design = list(
     ## Standard MOC without conditional sampler + plausibility based on gower
     data.frame(n_synth = "NA", node_selector = "NA", 
       weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("MOC")),
+    ## MOC with ctree conditional sampler + plausibility based on gower
+    data.frame(n_synth = "NA", node_selector = "NA", 
+      weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("MOCCTREE")),
    ## NICE with plausibility
   data.frame(n_synth = "NA", node_selector = "NA", 
     weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("NICE")),
   ## WhatIf with plausibility
-    data.frame(n_synth = "NA", node_selector = "NA", 
+    data.frame(n_synth = "NA", node_selector = "NA",
       weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("WhatIf"))
   )
 )
@@ -204,7 +211,8 @@ summarizeExperiments()
 unwrap(getJobPars())
 
 # Test jobs -----------------------------------------------------------
-# testJob(id = 1L) 
+# testJob(id = 1L)
+
 
 # Submit -----------------------------------------------------------
 submitJobs()
