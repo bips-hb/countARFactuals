@@ -524,18 +524,17 @@ make_moc_search_plot = function(data, objectives) {
 # Conditional mutator as described in the MOC paper
 MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
   public = list(
-    initialize = function(cond_sampler, x_interest, evidence, param_set, p_mut, p_mut_gen) {
+    initialize = function(cond_sampler, x_interest, desired_prob = NULL, param_set, p_mut, p_mut_gen) {
       super$initialize()
       assert_class(param_set, "ParamSet")
       assert_list(cond_sampler)
       if (inherits(cond_sampler, "ctree_sampler")) {
         assert_list(cond_sampler,  len = length(param_set$ids()))
       } else {
-        assert_true(!is.null(evidence))
-        assert_true("yhat" %in% evidence$variable)
+        assert_true(!is.null(desired_prob))
       }
       private$x_interest = x_interest
-      private$evidence = evidence
+      private$desired_prob = desired_prob
       private$param_set = param_set
       private$cond_sampler = cond_sampler
       private$p_mut = p_mut
@@ -545,7 +544,7 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
   private = list(
     cond_sampler = NULL,
     x_interest = NULL,
-    evidence = NULL,
+    desired_prob = NULL,
     param_set = NULL,
     p_mut = NULL,
     p_mut_gen = NULL,
@@ -559,52 +558,59 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
       lowers = private$param_set$lower
       uppers = private$param_set$upper
       values_mutated = copy(values)
-      for (i in seq_len(nrow(values))) {
-        if (runif(1L) < private$p_mut) {
-          if (inherits(private$cond_sampler, "arf_multi_sampler")) {
-           mutate_cols  = flex_features[runif(length(flex_features)) < private$p_mut_gen]
-           if (length(mutate_cols) >= 1) {
-             synth = data.table()
-             cols = setdiff(names(private$x_interest), mutate_cols)
-             fixed = private$x_interest[, ..cols]
-             if (length(cols) > 0) {
-               evidence = arf:::prep_evi(private$cond_sampler, fixed)
-             } else {
-               evidence = NULL
-             }
-             evidence = rbind(evidence, private$evidence)
-             synth = forge(private$cond_sampler, n_synth = 1, evidence = evidence)
-             for (j in mutate_cols) {
-             	if (j %in% names(lowers)) {
-            		mutated_val =  pmax(pmin(synth[[j]], uppers[[j]]), lowers[[j]])
-             	}
-                set(values_mutated, i, j, value = mutated_val)
-             }
-           }
+      
+      # select candidates
+      row.ids = which(runif(nrow(values)) < private$p_mut)
+      
+      if (inherits(private$cond_sampler, "arf_multi_sampler")) {
+            evidence <- rbindlist(lapply(row.ids, function(i) {
+              fixed = copy(values[i,])
+              mutate_cols = flex_features[runif(length(flex_features)) < private$p_mut_gen]
+              na_cols = setdiff(colnames(fixed), mutate_cols)
+              fixed[, (na_cols) := NA]
+              evidence = fixed
+              evidence = data.table(evidence, 
+                yhat = paste0("(", min(private$desired_prob), ",", 
+                  max(private$desired_prob), ")"))
+            }))
+            synth <- forge(private$cond_sampler, n_synth = 1, condition = evidence)
+            synth[, yhat := NULL]
+            
+              my_fun = function(x, name) {
+                pmax(pmin(x, uppers[[name]]), lowers[[name]])
+              }
+          
+            synth = synth[, Map(my_fun, .SD, names(lowers)), .SDcols = names(lowers)]
+            
+            values_mutated[row.ids, ] = synth
           } else {
-            for (j in sample(flex_features)) {
+            evidence_yhat = data.table(variable = "yhat", 
+                    value = c(min(private$target), max(private$target)), 
+                      relation = c(">=", "<="))
+      
+            for (i in row.ids) {
+              for (j in sample(flex_features)) {
               if (runif(1L) < private$p_mut_gen) {
                 if (inherits(private$cond_sampler, "ctree_sampler")) {
                   set(values_mutated, i, j, value = private$cond_sampler[[j]]$sample(values[i, ]))
                 } else if (inherits(private$cond_sampler, "arf_single_sampler")) {
-                  synth = data.table()
-                  cols = setdiff(names(private$x_interest), j)
-                  fixed = private$x_interest[, ..cols]
-                  if (length(cols) > 0) {
-                    evidence = arf:::prep_evi(private$cond_sampler, fixed)
-                  } else {
-                    evidence = NULL
-                  }
-                  evidence = rbind(evidence, private$evidence)
-                  synth = forge(private$cond_sampler, n_synth = 1, evidence = evidence)
-                  set(values_mutated, i, j, value = synth[[j]])
+                  # synth = data.table()
+                  # cols = setdiff(names(private$x_interest), j)
+                  # fixed = private$x_interest[, ..cols]
+                  # if (length(cols) > 0) {
+                  #   evidence = arf:::prep_evi(private$cond_sampler, fixed)
+                  # } else {
+                  #   evidence = NULL
+                  # }
+                  # evidence = rbind(evidence, evidence_yhat)
+                  # synth = forge(private$cond_sampler, n_synth = 1, evidence = evidence)
+                  # set(values_mutated, i, j, value = synth[[j]])
+                  stop("conditional_sampler 'arf_single' not supported in this version")
                 }
               }
             }
           }
         }
-        
-      }
       if (length(fixed_features) > 0) {
         values_mutated[, (fixed_features) := NULL] 
       } else {
@@ -615,8 +621,8 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
 )
 
 
-make_moc_conditional_mutator = function(ps, x_interest, evidence, max_changed, p_mut, p_mut_gen, p_mut_use_orig, cond_sampler) {
-  op_seq1 = MutatorConditional$new(cond_sampler, x_interest, evidence, ps, p_mut, p_mut_gen)
+make_moc_conditional_mutator = function(ps, x_interest, desired_prob, max_changed, p_mut, p_mut_gen, p_mut_use_orig, cond_sampler) {
+  op_seq1 = MutatorConditional$new(cond_sampler, x_interest, desired_prob, ps, p_mut, p_mut_gen)
   op_seq2 = MutatorReset$new(x_interest, p_mut_use_orig, max_changed)
   mut("sequential", list(op_seq1, op_seq2))
 }
