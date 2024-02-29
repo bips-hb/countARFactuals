@@ -136,7 +136,7 @@ Counterfactuals = R6::R6Class("Counterfactuals",
             cond_sampler = psi
           }
           
-          evals$neg_lik = exp(-lik(cond_sampler, private$.data, arf = arf, log = FALSE))
+          evals$neg_lik = exp(-lik(cond_sampler, private$.data, arf = arf, log = FALSE, parallel = FALSE))
       }
       
       if ("dist_target" %in% measures) {

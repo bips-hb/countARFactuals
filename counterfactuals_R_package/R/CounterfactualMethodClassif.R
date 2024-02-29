@@ -81,6 +81,12 @@ CounterfactualMethodClassif = R6::R6Class("CounterfactualMethodClassif", inherit
       private$x_interest = x_interest
       private$desired_class = desired_class
       private$desired_prob = desired_prob
+      
+      # update param_set if necessary because x_interest other bounds
+      if (is.character(private$param_set$check(as.list(private$x_interest)))) {
+      	private$param_set = make_param_set(rbind(private$predictor$data$X, private$x_interest), private$lower, private$upper)
+      }
+      
       cfactuals = private$run()
       
       if (is.data.frame(cfactuals) && nrow(merge(cfactuals, x_interest)) > 0L) {
