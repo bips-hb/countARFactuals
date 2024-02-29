@@ -89,19 +89,20 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
     } else {
       desired_prob = c(0, 0.5)
     }
+    
     # Generate counterfactuals, coverage only
     tic()
     if (cf_method == "MOCARF") {
       cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "lik", max_changed = max_feats_to_change,
         conditional_mutator = "arf_multi", arf = instance$arf, psi = instance$psi, 
-        n_generations = 50L, return_all = TRUE, distance_function = "gower_c")
+        n_generations = 50L, return_all = TRUE, distance_function = "gower_c", quiet = TRUE)
     } else if (cf_method == "MOC") {
       cac = MOCClassif$new(predictor = instance$predictor, n_generations = 50L, 
-        max_changed = max_feats_to_change, return_all = TRUE, distance_function = "gower_c")
+        max_changed = max_feats_to_change, return_all = TRUE, distance_function = "gower_c", quiet = TRUE)
     } else if (cf_method == "MOCCTREE") {
       cac = MOCClassif$new(predictor = instance$predictor, plausibility_measure = "gower", max_changed = max_feats_to_change,
         conditional_mutator = "ctree", arf = instance$arf, psi = instance$psi, 
-        n_generations = 50L, return_all = TRUE, distance_function = "gower_c")
+        n_generations = 50L, return_all = TRUE, distance_function = "gower_c", quiet = TRUE)
     } else if (cf_method == "ARF") {
       cac = CountARFactualClassif$new(predictor = instance$predictor, max_feats_to_change = max_feats_to_change,
         weight_node_selector = c(weight_coverage, weight_proximity), arf = instance$arf, 
