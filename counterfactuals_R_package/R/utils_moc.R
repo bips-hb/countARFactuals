@@ -584,10 +584,6 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
             
             values_mutated[row.ids, ] = synth
           } else {
-            evidence_yhat = data.table(variable = "yhat", 
-                    value = c(min(private$target), max(private$target)), 
-                      relation = c(">=", "<="))
-      
             for (i in row.ids) {
               for (j in sample(flex_features)) {
               if (runif(1L) < private$p_mut_gen) {
