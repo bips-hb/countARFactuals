@@ -28,7 +28,7 @@ Imports:
     paradox,
     miesmuschel,
     bbotk,
-    arf
+    arf (>= 0.2.2)
 Suggests:
     gower,
     randomForest,
