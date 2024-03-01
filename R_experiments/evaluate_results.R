@@ -59,9 +59,25 @@ res_mean = merge(res_mean, res_log_probs_nondom, by = c("method", "dataset", "id
 # saveRDS(res, "R_experiments/res.Rds")
 # saveRDS(res_mean, "R_experiments/res_mean.Rds")
 
+# # Get numbers, HV, correlation
+# res <- as.data.table(readRDS("R_experiments/res.Rds"))
+# res[, "number" := .N, by = .(method, dataset, id)]
+# res[nondom == TRUE, "number_nondom" := .N, by = .(method, dataset, id)]
+# eval_columns = c("dist_x_interest", "no_changed", "neg_lik", "dist_train", 
+#   "dist_x_interest_nondom", "no_changed_nondom", "neg_lik_nondom", 
+#   "dist_train_nondom", "log_probs", "runtime", "number", "number_nondom")
+# res_mean <- res[, lapply(.SD, mean, na.rm = TRUE), .SDcols = eval_columns, by = .(method, dataset, id)]
+# res_log_probs_nondom = res[nondom == TRUE, lapply(.SD, mean), .SDcols = "log_probs", by = .(method, dataset, id)]
+# setnames(res_log_probs_nondom, "log_probs", "log_probs_nondom")
+# 
+# res_mean = merge(res_mean, res_log_probs_nondom, by = c("method", "dataset", "id"))
+# saveRDS(res_mean, "R_experiments/res_mean.Rds")
+
 # Plot results -------------------------------------------------------------
 res_mean <- readRDS("R_experiments/res_mean.Rds")
 res_mean[, "log(runtime)" := log(runtime)]
+res_mean[, "log(probs)" := log(log_probs)]
+res_mean[, "log(probs_nondom)" := log(log_probs_nondom)]
 res_mean$dataset = factor(res_mean$dataset, levels = c("cassini", "pawelczyk", "two_sines", "bn_5_v2", "bn_10_v2", "bn_20", "bn_50_v2"))
 
 setnames(res_mean, old = c("dist_x_interest", "no_changed", "dist_train", "dist_x_interest_nondom", "no_changed_nondom", "dist_train_nondom"), 
@@ -125,13 +141,15 @@ ggsave(filename = "R_experiments/results_objectives_nondom.png", plot = obj_plot
   dpi = 200, width = 11, height = 7.5)
 
 # selling points 
-p5 = plot_results(plotdata_all, "log_probs")
-p6 = plot_results(plotdata_nondom, "log_probs_nondom", remove_strip_x = TRUE)
+p5 = plot_results(plotdata_all, "log(probs)")
+p6 = plot_results(plotdata_nondom, "log(probs_nondom)", remove_strip_x = TRUE)
 p7 = plot_results(plotdata_all, "log(runtime)", remove_strip_x = TRUE)
-sell_plot = grid.arrange(p5, p6, p7, ncol = 1L)
+p8 = plot_results(plotdata_all, "number", remove_strip_x = TRUE)
+p9 = plot_results(plotdata_nondom, "number_nondom", remove_strip_x = TRUE)
+sell_plot = grid.arrange(p5, p6, p7, p8, p9, ncol = 1L)
 
 ggsave(filename = "R_experiments/logprobs_runtime.png", plot = sell_plot, 
-  dpi = 200, width = 10, height = 4.5)
+  dpi = 200, width = 10, height = 7)
 
 
 
