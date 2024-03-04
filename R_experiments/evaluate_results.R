@@ -56,6 +56,3 @@ hvs_mean = res[, lapply(.SD, mean, na.rm = TRUE), .SDcols = c("hv", "hv_nondom")
 res_mean = merge(res_mean, hvs_mean, by = c("method", "dataset", "id"))
 
 saveRDS(res_mean, "R_experiments/res_mean.Rds")
-
-
-
