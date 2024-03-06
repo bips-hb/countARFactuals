@@ -109,7 +109,8 @@ Evaluates the counterfactuals. It returns the counterfactuals together with the 
   show_diff = FALSE,
   k = 1L,
   weights = NULL,
-  arf = NULL
+  arf = NULL,
+  psi = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -147,6 +148,9 @@ specifies the weight of the i-th closest data point.}
 
 \item{\code{arf}}{(\code{ranger}) \cr
 Fitted arf. If NULL, arf is newly fitted.}
+
+\item{\code{psi}}{(\code{list}) \cr
+Fitted forde object. If NULL, arf::forde is called.}
 }
 \if{html}{\out{</div>}}
 }
@@ -161,7 +165,8 @@ Evaluates a set of counterfactuals. It returns the evaluation \code{measures}.
   measures = c("diversity", "no_nondom", "frac_nondom", "hypervolume"),
   plausibility_measure = "gower",
   nadir = NULL,
-  arf = NULL
+  arf = NULL,
+  psi = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -196,6 +201,9 @@ Default is NULL, meaning the nadir point by Dandl et al. (2020) is used:
 
 \item{\code{arf}}{(\code{ranger}) \cr
 Fitted arf. If NULL, arf is newly fitted.}
+
+\item{\code{psi}}{(\code{list}) \cr
+Fitted forde object. If NULL, arf::forde is called.}
 }
 \if{html}{\out{</div>}}
 }
