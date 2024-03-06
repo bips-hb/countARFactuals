@@ -48,10 +48,17 @@ setnames(res_mean, old = c("dist_x_interest", "no_changed",
   "dist_x_interest_nondom", "no_changed_nondom"), 
   new = c("proximity", "sparsity", "proximity_nondom", "sparsity_nondom"))
 
-# calculate ranks per objective
+
+
+####  calculate ranks per objective ------
 res_mean = res_mean[!method %in% c("ARF 200"), 
   c("rank_plausibility", "rank_proximity", "rank_sparsity", "rank_runtime") := lapply(.SD, frank, ties.method = "min"), 
   .SDcols = c("plausibility", "proximity", "sparsity", "runtime"), 
+  by = .(dataset, id)]
+
+res_mean = res_mean[!method %in% c("ARF 200"), 
+  c("rank_plausibility_nondom", "rank_proximity_nondom", "rank_sparsity_nondom") := lapply(.SD, frank, ties.method = "min"), 
+  .SDcols = c("plausibility_nondom", "proximity_nondom", "sparsity_nondom"), 
   by = .(dataset, id)]
 
 combine = function(x, mode = "mean") {
@@ -69,12 +76,16 @@ combine = function(x, mode = "mean") {
 rank_mean = res_mean[, lapply(.SD, combine, mode = "mean"), 
   .SDcols = c("rank_plausibility", "rank_proximity", "rank_sparsity", "rank_runtime"), 
   by = .(method)]
-# rank_median = res_mean[, lapply(.SD, combine, mode = "median"), 
-#   .SDcols = c("rank_plausibility", "rank_proximity", "rank_sparsity"), 
-#   by = .(method)]
+
+rank_mean_nondom = res_mean[, lapply(.SD, combine, mode = "mean"), 
+  .SDcols = c("rank_plausibility_nondom", "rank_proximity_nondom", "rank_sparsity_nondom"), 
+  by = .(method)]
 
 print(xtable::xtable(rank_mean[!method %in% c("ARF 200")]), include.rownames = FALSE)
+print(xtable::xtable(rank_mean_nondom[!method %in% c("ARF 200")]), include.rownames = FALSE)
 
+
+### get figures -----
 plotdata = data.table(melt(res_mean, id.vars=c("method", "dataset", "id")))
 plotdata_nondom = plotdata[grepl("nondom", plotdata$variable),]
 
