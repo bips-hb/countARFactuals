@@ -40,6 +40,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' @template predictor
     #' @param max_feats_to_change (`numeric(1)`)\cr  
     #' The maximum number of features allowed to be altered (default number of features of `predictor$data`).
+    #' If max_feats_to_change is larger the number of features after account for fixed features, a message is printed. 
     #' @param n_synth (`numeric(1)`) \cr 
     #' The number of samples drawn from the marginal distributions (default 10L).
     #' @param n_iterations (`numeric(1)`) \cr 
@@ -59,8 +60,10 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' Ignored if `feature_selector = "random"`. 
     #' Either "fastshap" based on the `fastshap` package or "icesd" (default)
     #' based on the standard deviation of the ICE curve is possible.
+    #' @param fixed_features (`character()`|`NULL`)\cr
+    #' Names of features that are not allowed to be changed. NULL (default) allows all features to be changed.
     #' @param node_selector (`character(1)`)\cr
-    #' How to select a node, based on "coverage" alone or on coverage and proximity ("coverage_proximity").
+    #' How to select a node, based on "coverage" alone (default) or on coverage and proximity ("coverage_proximity").
     #' @param weight_node_selector (`character(1)`) \cr
     #' How to weight coverage and proximity when `node_selector` is "coverage_proximity".
     #' @param arf (`ranger`) \cr
@@ -70,16 +73,20 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     #' 
     #' @export
     initialize = function(predictor, max_feats_to_change = predictor$data$n.features, 
-      n_synth = 10L, n_iterations = 50L, feature_selector = "random_importance", 
-      importance_method = "icesd", node_selector = "coverage_proximity", 
-      weight_node_selector = c(20, 20), arf = NULL, psi = NULL) { 
+      n_synth = 20L, n_iterations = 50L, feature_selector = "random_importance", 
+      importance_method = "icesd", node_selector = "coverage", 
+      weight_node_selector = c(20, 20), fixed_features = NULL, arf = NULL, psi = NULL) { 
       # TODO: add other hyperparameter
       super$initialize(predictor)
       checkmate::assert_integerish(max_feats_to_change, lower = 1L, upper = predictor$data$n.features)
       checkmate::assert_integerish(n_synth, lower = 1L)
       checkmate::assert_choice(feature_selector, choices = c("importance", "random", "random_importance"))
       checkmate::assert_choice(importance_method, choices = c("fastshap", "icesd"))
+      if (!is.null(fixed_features)) {
+        assert_names(fixed_features, subset.of = private$predictor$data$feature.names)
+      }
       checkmate::assert_class(arf, "ranger", null.ok = TRUE)
+    
       private$max_feats_to_change = max_feats_to_change
       private$feature_selector = feature_selector
       private$max_feats_to_change = max_feats_to_change
@@ -88,6 +95,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       private$importance_method = importance_method
       private$arf = arf
       private$psi = psi
+      private$fixed_features = fixed_features
       private$node_selector = node_selector
       private$weight_node_selector = weight_node_selector
     }
@@ -109,6 +117,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
     n_iterations = NULL,
     feature_selector = NULL,
     importance_method = NULL,
+    fixed_features = NULL,
     .arf_iterations = NULL,
     arf = NULL,
     psi = NULL,
@@ -128,7 +137,6 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
       } else {
         psi = private$psi
       }
-      
       # Gower distances
       leaf_means <- dcast(psi$cnt[variable != "yhat", .(f_idx, variable, mu)], f_idx ~ variable, value.var = "mu")
       leaf_dist <- data.table(f_idx = leaf_means$f_idx, dist = gower:::gower_dist(leaf_means, private$x_interest))
@@ -142,6 +150,8 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
         psi$forest[, dist := NULL]
       }
       
+      flex_cols = setdiff(names(private$x_interest), private$fixed_features)
+      
       # Conditional sampling
       ##  Select fixed variables/conditioning set
       if (grepl("importance", private$feature_selector)) {
@@ -154,48 +164,50 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
             unname(object$predict(newdata)[,private$desired_class])
           }
           shap = fastshap::explain(private$predictor, X = private$predictor$data$get.x(), 
-            pred_wrapper = pfun, newdata = private$x_interest,
+            pred_wrapper = pfun, newdata = private$x_interest, feature_names = flex_cols,
             nsim = 1000)
           vim = abs(shap[1, ])
           # ICE curve standard deviation as local importance
         } else if (private$importance_method == "icesd") {
           param_set = make_param_set(private$predictor$data$get.x())
           vim = get_ICE_sd(private$x_interest, private$predictor, param_set)
+          vim = vim[flex_cols]
         }
       }
       
-      synth = data.table()
-      for (i in 1:private$n_iterations) {
+      evidence <- rbindlist(lapply(1:private$n_iterations, function(i) {
+        max_possible = private$predictor$data$n.features - length(private$fixed_features)
+        if (max_possible >= private$max_feats_to_change) {
+          max_possible = private$max_feats_to_change
+        }
         feats_not_to_change = sample(seq(
-          private$predictor$data$n.features - private$max_feats_to_change, 
-          private$predictor$data$n.features - 1L), size = 1L)
-        
+          private$predictor$data$n.features - max_possible - length(private$fixed_features), 
+          private$predictor$data$n.features - 1 - length(private$fixed_features)), size = 1L)
         if (private$feature_selector == "importance") {
           ordered_features = names(sort(vim)) # Smallest (= less important) first
           cols = ordered_features[1:feats_not_to_change]
         } else if (private$feature_selector == "random_importance") {
-          #bassert_true(all(names(vim) == private$predictor$data$feature.names))
+          # assert_true(all(names(vim) == private$predictor$data$feature.names))
           # get probabilities using softmax
           softmax = function(x) exp(x)/sum(exp(x))
           p_selected = softmax(-vim)
-          cols = sample(private$predictor$data$feature.names, 
+          cols = sample(flex_cols, 
             size = feats_not_to_change,
             prob = p_selected)
         } else if (private$feature_selector == "random") {
-          cols = sample(private$predictor$data$feature.names, 
+          cols = sample(flex_cols, 
             size = feats_not_to_change)
         }
-        fixed = private$x_interest[, ..cols]
-        if (feats_not_to_change > 0) {
-         evidence = arf:::prep_evi(psi, fixed)
-        } else {
-          evidence = NULL
-        }
-        evidence = rbind(evidence, data.table(variable = "yhat", 
-          value = c(min(private$desired_prob), max(private$desired_prob)), 
-          relation = c(">=", "<=")))
-        synth = rbind(synth, forge(psi, n_synth = private$n_synth, evidence = evidence))
-      }
+        cols = c(cols, private$fixed_features)
+        fixed = copy(private$x_interest)
+        na_cols <- setdiff(colnames(fixed), cols)
+        fixed[, (na_cols) := NA]
+        evidence = fixed
+        evidence = data.table(evidence, 
+                              yhat = paste0("(", min(private$desired_prob), ",", 
+                                            max(private$desired_prob), ")"))
+      }))
+      synth <- forge(psi, n_synth = private$n_synth, condition = evidence)
       synth[, yhat := NULL]
       
       # Recode factors to original factor levels

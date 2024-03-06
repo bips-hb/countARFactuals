@@ -69,13 +69,15 @@ Create a new \code{MOCClassif} object.
 \if{html}{\out{<div class="r">}}\preformatted{CountARFactualClassif$new(
   predictor,
   max_feats_to_change = predictor$data$n.features,
-  n_synth = 10L,
+  n_synth = 20L,
   n_iterations = 50L,
   feature_selector = "random_importance",
   importance_method = "icesd",
-  node_selector = "coverage_proximity",
+  node_selector = "coverage",
   weight_node_selector = c(20, 20),
-  arf = NULL
+  fixed_features = NULL,
+  arf = NULL,
+  psi = NULL
 )}\if{html}{\out{</div>}}
 }
 
@@ -86,7 +88,8 @@ Create a new \code{MOCClassif} object.
 The object (created with \code{iml::Predictor$new()}) holding the machine learning model and the data.}
 
 \item{\code{max_feats_to_change}}{(\code{numeric(1)})\cr
-The maximum number of features allowed to be altered (default number of features of \code{predictor$data}).}
+The maximum number of features allowed to be altered (default number of features of \code{predictor$data}).
+If max_feats_to_change is larger the number of features after account for fixed features, a message is printed.}
 
 \item{\code{n_synth}}{(\code{numeric(1)}) \cr
 The number of samples drawn from the marginal distributions (default 10L).}
@@ -112,13 +115,19 @@ Either "fastshap" based on the \code{fastshap} package or "icesd" (default)
 based on the standard deviation of the ICE curve is possible.}
 
 \item{\code{node_selector}}{(\code{character(1)})\cr
-How to select a node, based on "coverage" alone or on coverage and proximity ("coverage_proximity").}
+How to select a node, based on "coverage" alone (default) or on coverage and proximity ("coverage_proximity").}
 
 \item{\code{weight_node_selector}}{(\code{character(1)}) \cr
 How to weight coverage and proximity when \code{node_selector} is "coverage_proximity".}
 
+\item{\code{fixed_features}}{(\code{character()}|\code{NULL})\cr
+Names of features that are not allowed to be changed. NULL (default) allows all features to be changed.}
+
 \item{\code{arf}}{(\code{ranger}) \cr
 Fitted arf. If NULL, arf is newly fitted.}
+
+\item{\code{psi}}{(\code{list}) \cr
+Fitted forde object. If NULL, arf::forde is called.}
 }
 \if{html}{\out{</div>}}
 }

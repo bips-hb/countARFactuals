@@ -134,6 +134,7 @@ MOCClassif = R6::R6Class("MOCClassif", inherit = CounterfactualMethodClassif,
       assert_numeric(weights, any.missing = FALSE, len = k, null.ok = TRUE)
       assert_choice(init_strategy, choices = c("icecurve", "random", "sd", "traindata"))
       assert_choice(conditional_mutator, choices = c("arf_single", "arf_multi", "ctree"), null.ok = TRUE)
+      if (!is.null(conditional_mutator) && conditional_mutator == "ctree") assert_true(plausibility_measure == "gower")
       assert_choice(plausibility_measure, choices = c("gower", "lik"))
       assert_class(arf, "ranger", null.ok = TRUE)
       assert_logical(return_all, null.ok = FALSE)

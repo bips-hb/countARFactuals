@@ -69,15 +69,10 @@ moc_algo = function(predictor, x_interest, pred_column, target, param_set, lower
         p_mut_use_orig = p_mut_use_orig
       )
     } else {
-      if (grepl("arf", class(cond_sampler))) {
-        evidence_yhat = data.table(variable = "yhat", 
-          value = c(min(target), max(target)), 
-          relation = c(">=", "<="))
-      } 
       op_m = make_moc_conditional_mutator(
         ps = param_set_flex, 
         x_interest = x_interest,
-        evidence = evidence_yhat, 
+        desired_prob = target, 
         max_changed = max_changed, 
         p_mut = p_mut,
         p_mut_gen = p_mut_gen, 
