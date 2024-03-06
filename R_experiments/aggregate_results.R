@@ -41,17 +41,6 @@ corr = merge(dt_lik, dt_gow, by = c("method", "dataset", "id"))
 res_mean = merge(res_mean, corr, by = c("method", "dataset", "id"))
 
 # HV on o_prox, o_sparse and true implausibility ------------------------------
-# hv_measures = c("dist_x_interest", "rel_no_changed", "implausibility")
-# nadir = res[, lapply(.SD, max), .SDcols = hv_measures]
-# get_hv = function(x) {
-#   miesmuschel::domhv(fitnesses = -as.matrix(rbind(x)), nadir = -as.numeric(nadir))
-# }
-# hvs = res[, hv := get_hv(.SD), .SDcols = hv_measures, by = .(method, dataset, id)]
-# hvs_nondom = res[nondom == TRUE, hv_nondom := get_hv(.SD), 
-#   .SDcols = hv_measures, by = .(method, dataset, id)]
-# hvs_mean = res[, lapply(.SD, mean, na.rm = TRUE), .SDcols = c("hv", "hv_nondom"), by = .(method, dataset, id)]
-# res_mean = merge(res_mean, hvs_mean, by = c("method", "dataset", "id"))
-
 ### nadir per dataset/id 
 hv_measures = c("dist_x_interest", "rel_no_changed", "implausibility")
 hv_columns = c(hv_measures, "nadir_dist_x_interest", "nadir_no_changed", "nadir_implaus")
@@ -69,9 +58,6 @@ hvs_nondom = res[nondom == TRUE, hv_nondom := get_hv(.SD),
   .SDcols = hv_columns, by = .(method, dataset, id)]
 hvs_mean = res[, lapply(.SD, mean, na.rm = TRUE), .SDcols = c("hv", "hv_nondom"), by = .(method, dataset, id)]
 res_mean = merge(res_mean, hvs_mean, by = c("method", "dataset", "id"))
-
-### 
-
 
 # Number of CFEs -------------------------------------------------------------
 res[, number := .N, by = .(method, dataset, id)]

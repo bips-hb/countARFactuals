@@ -8,6 +8,7 @@ res_folder = file.path("R_experiments/results", Sys.Date())
 dir.create(res_folder)
 
 res_mean = readRDS("R_experiments/res_mean.Rds")
+res_mean = res_mean[method != "WhatIf", ]
 
 # Correlation analysis ------------------------------------------------------------
 # FIXME: some correlations NA because all values constant (0 or 1)
@@ -23,13 +24,15 @@ boxplot(cor_gow ~ method, corr_data)
 # FIXME: weird things with NICE :/
 
 # Plot results -------------------------------------------------------------
-res_mean[, "log(runtime)" := log(runtime)]
+res_mean[, "runtime" := log(runtime)]
 res_mean[, "log(probs)" := log(log_probs)]
+res_mean[, "plausibility" := -log(log_probs)]
+res_mean[, "plausibility_nondom" := -log(log_probs_nondom)]
 res_mean[, "log(probs_nondom)" := log(log_probs_nondom)]
 res_mean[, "log(hv)" := log(hv)]
 res_mean[, "log(hv_nondom)" := log(hv_nondom)]
-res_mean[, "log(no)" := log(number)]
-res_mean[, "log(no_nondom)" := log(number_nondom)]
+res_mean[, "no" := log(number)]
+res_mean[, "no_nondom" := log(number_nondom)]
 res_mean$dataset = factor(res_mean$dataset, levels = c("cassini", "pawelczyk", 
   "two_sines", "bn_5_v2", "bn_10_v2", "bn_20", "bn_50_v2"), 
   labels = c("cassini", "pawelczyk", "two_sines", "bn_5", "bn_10", 
@@ -37,14 +40,42 @@ res_mean$dataset = factor(res_mean$dataset, levels = c("cassini", "pawelczyk",
 res_mean$method = factor(res_mean$method, levels = c("WhatIf", "NICE", "MOC", 
   "MOCCTREE", "MOCARF", "ARF 20", "ARF 200"))
 
+res_mean[method == "ARF 20", method := "ARF"]
+res_mean[, method := droplevels(method)]
+
 # rename objectives
-setnames(res_mean, old = c("dist_x_interest", "no_changed", "dist_train", 
-  "dist_x_interest_nondom", "no_changed_nondom", "dist_train_nondom"), 
-  new = c("o_prox", "o_sparse", "o_plaus", "o_prox_nondom", "o_sparse_nondom", 
-    "o_plaus_nondom"))
+setnames(res_mean, old = c("dist_x_interest", "no_changed", 
+  "dist_x_interest_nondom", "no_changed_nondom"), 
+  new = c("proximity", "sparsity", "proximity_nondom", "sparsity_nondom"))
+
+# calculate ranks per objective
+res_mean = res_mean[!method %in% c("ARF 200"), 
+  c("rank_plausibility", "rank_proximity", "rank_sparsity", "rank_runtime") := lapply(.SD, frank, ties.method = "min"), 
+  .SDcols = c("plausibility", "proximity", "sparsity", "runtime"), 
+  by = .(dataset, id)]
+
+combine = function(x, mode = "mean") {
+  if (mode == "mean") {
+    m = round(mean(x), 2)
+    r = round(sd(x), 2) 
+  } else if (mode == "median") 
+  {
+    m = median(x)
+    r = IQR(x, na.rm = TRUE)
+  }
+  paste0(m, " [", r, "]")
+}
+
+rank_mean = res_mean[, lapply(.SD, combine, mode = "mean"), 
+  .SDcols = c("rank_plausibility", "rank_proximity", "rank_sparsity", "rank_runtime"), 
+  by = .(method)]
+# rank_median = res_mean[, lapply(.SD, combine, mode = "median"), 
+#   .SDcols = c("rank_plausibility", "rank_proximity", "rank_sparsity"), 
+#   by = .(method)]
+
+print(xtable::xtable(rank_mean[!method %in% c("ARF 200")]), include.rownames = FALSE)
 
 plotdata = data.table(melt(res_mean, id.vars=c("method", "dataset", "id")))
-plotdata_all = plotdata[!grepl("nondom", plotdata$variable),]
 plotdata_nondom = plotdata[grepl("nondom", plotdata$variable),]
 
 plot_results = function(data, evaluation_measures = NULL, remove_strip_x = FALSE) {
@@ -58,7 +89,7 @@ plot_results = function(data, evaluation_measures = NULL, remove_strip_x = FALSE
     facet_grid(variable ~ dataset, scales = "free_x") + 
     theme_bw() +
     scale_color_brewer(palette="BrBG") + 
-    scale_y_continuous(breaks = pretty_breaks(n = 3)) + 
+    scale_y_continuous(breaks = pretty_breaks(n = 2)) + 
     theme(legend.position="none", 
       axis.title.x = element_blank(), 
       axis.title.y = element_blank(), 
@@ -72,54 +103,40 @@ plot_results = function(data, evaluation_measures = NULL, remove_strip_x = FALSE
   
 }
 
-# objectives
-p_prox = plot_results(plotdata_all[method != "ARF 200"], "o_prox", remove_strip_x = TRUE)
-p_sparse = plot_results(plotdata_all[method != "ARF 200"], "o_sparse", remove_strip_x = TRUE)
-p_plaus = plot_results(plotdata_all[method != "ARF 200"], "o_plaus", remove_strip_x = TRUE)
-p_neglik = plot_results(plotdata_all[method != "ARF 200"], "neg_lik", remove_strip_x = TRUE)
-obj_plot = p_prox/p_sparse/p_plaus/p_neglik
+# To show: 
+p_plaus = plot_results(plotdata[method != "ARF 200"], "plausibility")
+p_prox = plot_results(plotdata[method != "ARF 200"], "proximity", remove_strip_x = TRUE)
+p_sparse = plot_results(plotdata[method != "ARF 200"], "sparsity", remove_strip_x = TRUE)
+p_runtime = plot_results(plotdata[method != "ARF 200"], "runtime", remove_strip_x = TRUE)
 
-# ggsave(filename = file.path(res_folder,"results_objectives.png"), plot = obj_plot, 
-#   dpi = 200, width = 11, height = 6)
+p_main = p_plaus / p_prox / p_sparse / p_runtime
+p_main
 
-# nondom 
-p_prox_nondom = plot_results(plotdata_nondom, "o_prox_nondom", remove_strip_x = TRUE)
-p_sparse_nondom = plot_results(plotdata_nondom, "o_sparse_nondom", remove_strip_x = TRUE)
-p_plaus_nondom = plot_results(plotdata_nondom, "o_plaus_nondom", remove_strip_x = TRUE)
-p_neglik_nondom = plot_results(plotdata_nondom, "neg_lik_nondom", remove_strip_x = TRUE)
+ggsave(filename = file.path(res_folder,"results_main.png"), plot = p_main, 
+   dpi = 200, width = 8, height = 4)
 
-obj_plot_nondom = p_prox_nondom/ p_sparse_nondom/ p_plaus_nondom/ p_neglik_nondom
-# ggsave(filename = file.path(res_folder,"results_objectives_nondom.png"), plot = obj_plot_nondom, 
-#   dpi = 200, width = 11, height = 6)
 
-# selling points 
-p_probs = plot_results(plotdata_all[method != "ARF 200"], "log(probs)")
-p_probs_nondom = plot_results(plotdata_nondom[method != "ARF 200"], "log(probs_nondom)", remove_strip_x = TRUE)
+# Appendix 
 p_hv = plot_results(plotdata[method != "ARF 200"], "hv", remove_strip_x = TRUE)
-p_hv_nondom = plot_results(plotdata_nondom[method != "ARF 200"], "hv_nondom", remove_strip_x = TRUE)
+p_no = plot_results(plotdata[method != "ARF 200"], "number", remove_strip_x = TRUE)
 
-# sell_obj = p_probs/p_probs_nondom/p_hv/p_hv_nondom
-# ggsave(filename = file.path(res_folder,"logprobs_hv.png"), plot = sell_obj, 
-#   dpi = 200, width = 10, height = 6)
+p_hv_no = p_hv / p_no
 
-p_runtime = plot_results(plotdata_all[method != "ARF 200"], "log(runtime)", remove_strip_x = TRUE)
-p_no = plot_results(plotdata_all[method != "ARF 200"], "log(no)", remove_strip_x = TRUE)
-p_no_nondom = plot_results(plotdata_nondom[method != "ARF 200"], "log(no_nondom)", remove_strip_x = TRUE)
-
-# sell_time_no = p_runtime/p_no/p_no_nondom
-# ggsave(filename = file.path(res_folder,"runtime_no.png"), plot = sell_time_no, 
-#   dpi = 200, width = 10, height = 5)
-
-# to show: 
-p_obj_hv = p_probs / p_sparse /p_prox / p_hv /p_runtime /p_no
-ggsave(filename = file.path(res_folder,"obj_hv.png"), plot = p_obj_hv, 
-  dpi = 200, width = 8, height = 6.5)
-
-p_obj_hv_nondom = p_probs_nondom / p_sparse_nondom /p_prox_nondom / p_hv_nondom / p_no_nondom
-ggsave(filename = file.path(res_folder,"obj_hv_nondom.png"), plot = p_obj_hv_nondom, 
-  dpi = 200, width = 8, height = 7)
-
-p_runtime2 = plot_results(plotdata_all[method %in% c("ARF 20", "ARF 200")], "log(runtime)", remove_strip_x = FALSE)
-ggsave(filename = file.path(res_folder,"runtimes_ARF.png"), plot = p_runtime2, 
+ggsave(filename = file.path(res_folder,"hv_no.png"), plot = p_hv_no, 
   dpi = 200, width = 8, height = 2)
 
+p_plaus_nd = plot_results(plotdata_nondom[method != "ARF 200"], "plausibility_nondom")
+p_prox_nd = plot_results(plotdata_nondom[method != "ARF 200"], "proximity_nondom", remove_strip_x = TRUE)
+p_sparse_nd = plot_results(plotdata_nondom[method != "ARF 200"], "sparsity_nondom", remove_strip_x = TRUE)
+p_hv_nd = plot_results(plotdata_nondom[method != "ARF 200"], "hv_nondom", remove_strip_x = TRUE)
+p_no_nondom = plot_results(plotdata_nondom[method != "ARF 200"], "number_nondom", remove_strip_x = TRUE)
+
+p_main_nd = p_plaus_nd / p_prox_nd / p_sparse_nd / p_hv_nd / p_no_nondom
+p_main_nd
+
+ggsave(filename = file.path(res_folder,"results_main_nondom.png"), plot = p_main_nd, 
+  dpi = 200, width = 8, height = 8)
+
+# p_runtime2 = plot_results(plotdata_all[method %in% c("ARF", "ARF 200")], "runtime", remove_strip_x = FALSE)
+# ggsave(filename = file.path(res_folder,"runtimes_ARF.png"), plot = p_runtime2, 
+#   dpi = 200, width = 8, height = 1)
