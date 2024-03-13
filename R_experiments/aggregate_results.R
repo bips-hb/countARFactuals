@@ -7,7 +7,7 @@ eval_columns = c("dist_x_interest", "no_changed", "neg_lik", "dist_train",
   "dist_x_interest_nondom", "no_changed_nondom", "neg_lik_nondom", 
   "dist_train_nondom", "log_probs", "runtime")
 save_columns = c(eval_columns, "id", "job.id", "n_synth", "problem", "cf_method", "dataset", "nondom")
-csv_dir = "cfs/29_02"
+csv_dir = "cfs/08_03_2"
 
 # Get results -------------------------------------------------------------
 
@@ -21,49 +21,52 @@ for (file in files) {
 }
 
 # Preprocessing ------------------------------------------------------------
-res = res[, log_probs := exp(log_probs)]
-res[, method := ifelse(cf_method == "ARF", paste(cf_method, n_synth), cf_method)]
-res = res[, implausibility := 1-log_probs]
-res = res[, max_no_changed := max(no_changed), by = .(method, dataset, id)]
-res = res[, rel_no_changed := no_changed/max(no_changed), by = .(method, dataset, id)]
-# saveRDS(res, "R_experiments/res.Rds")
+setnames(res, "cf_method", "method")
+max_features = list(cassini = 2L, pawelczyk = 2L, two_sines = 2L, bn_5_v2 = 4L, bn_10_v2 = 9L, 
+  bn_20 = 19L, bn_50_v2 = 49L)
+res = res[, max_features := as.numeric(max_features[dataset])]
+res = res[, rel_no_changed := no_changed/max_features]
+saveRDS(res, "R_experiments/res.Rds")
 
-# Averages per objective ---------------------------------------------------
-res_mean = res[, lapply(.SD, mean), .SDcols = eval_columns, by = .(method, dataset, id)]
-res_log_probs_nondom = res[nondom == TRUE, lapply(.SD, mean), .SDcols = "log_probs", by = .(method, dataset, id)]
-setnames(res_log_probs_nondom, "log_probs", "log_probs_nondom")
-res_mean = merge(res_mean, res_log_probs_nondom, by = c("method", "dataset", "id"))
-
-# Correlation estimated vs. true implausibility ------------------------------
-dt_lik = res[, .(cor_lik = cor(log_probs, -neg_lik, method = "spearman")), by = .(method, dataset, id)]
-dt_gow = res[, .(cor_gow = cor(log_probs, -dist_train, method = "spearman")), by = .(method, dataset, id)]
-corr = merge(dt_lik, dt_gow, by = c("method", "dataset", "id"))
-res_mean = merge(res_mean, corr, by = c("method", "dataset", "id"))
+# # Correlation estimated vs. true implausibility ------------------------------
+res = res[, probs := exp(log_probs)]
+dt_lik = res[, .(cor_lik = cor(probs, -neg_lik, method = "spearman")), by = .(method, dataset, id)]
+dt_gow = res[, .(cor_gow = cor(probs, -dist_train, method = "spearman")), by = .(method, dataset, id)]
+res_agg = merge(dt_lik, dt_gow, by = c("method", "dataset", "id"))
 
 # HV on o_prox, o_sparse and true implausibility ------------------------------
+res = res[, implausibility := 1-probs]
 ### nadir per dataset/id 
 hv_measures = c("dist_x_interest", "rel_no_changed", "implausibility")
-hv_columns = c(hv_measures, "nadir_dist_x_interest", "nadir_no_changed", "nadir_implaus")
-nadir = res[, lapply(.SD, max), .SDcols = hv_measures, by = .(dataset, id)]
-setnames(nadir, old = c("dist_x_interest", "rel_no_changed", "implausibility"),
+
+res[, c("scaled_dist_x_interest", "scaled_rel_no_changed", "scaled_implausibility") := 
+    lapply(.SD, function(x) as.vector(scale(x))), .SDcols = hv_measures, 
+  by = .(dataset)]
+hv_measures = paste0("scaled_", hv_measures)
+nadir = res[, lapply(.SD, max), .SDcols = hv_measures, by = .(dataset)]
+setnames(nadir, old = hv_measures,
   new = c("nadir_dist_x_interest", "nadir_no_changed", "nadir_implaus"))
-res = merge(res, nadir, by = c("dataset", "id"))
+res = merge(res, nadir, by = c("dataset"))
 
 get_hv = function(x) {
-  miesmuschel::domhv(fitnesses = -as.matrix(rbind(x[, c("dist_x_interest", "rel_no_changed", "implausibility")])),
+  miesmuschel::domhv(fitnesses = -as.matrix(rbind(x[, ..hv_measures])),
     nadir = -as.numeric(x[1, c("nadir_dist_x_interest", "nadir_no_changed", "nadir_implaus")]))
 }
-hvs = res[, hv := get_hv(.SD), .SDcols = hv_columns, by = .(method, dataset, id)]
-hvs_nondom = res[nondom == TRUE, hv_nondom := get_hv(.SD),
+hv_columns = c(hv_measures, "nadir_dist_x_interest", "nadir_no_changed", "nadir_implaus")
+
+hvs = res[nondom == TRUE, get_hv(.SD),
   .SDcols = hv_columns, by = .(method, dataset, id)]
-hvs_mean = res[, lapply(.SD, mean, na.rm = TRUE), .SDcols = c("hv", "hv_nondom"), by = .(method, dataset, id)]
-res_mean = merge(res_mean, hvs_mean, by = c("method", "dataset", "id"))
+setnames(hvs, "V1", "hv_normalized")
+res_agg = merge(res_agg, hvs, by = c("method", "dataset", "id"))
 
 # Number of CFEs -------------------------------------------------------------
-res[, number := .N, by = .(method, dataset, id)]
-res[nondom == TRUE, number_nondom := .N, by = .(method, dataset, id)]
-no_mean = res[, lapply(.SD, mean, na.rm = TRUE), .SDcols = c("number", "number_nondom"), 
-  by = .(method, dataset, id)]
-res_mean = merge(res_mean, no_mean, by = c("method", "dataset", "id"))
+number = res[nondom == TRUE, .N, by = .(method, dataset, id)]
+setnames(number, "N", "number")
+res_agg = merge(res_agg, number, by = c("method", "dataset", "id"))
 
-saveRDS(res_mean, "R_experiments/res_mean_new.Rds")
+# Runtime --------------------------------------------------------------------
+runtime = res[, mean(runtime), by = .(method, dataset, id)]
+setnames(runtime, "V1", "runtime")
+res_agg = merge(res_agg, runtime)
+
+saveRDS(res_agg, "R_experiments/res_agg.Rds")
