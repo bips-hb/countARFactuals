@@ -16,7 +16,7 @@ where we used `python/synthetic` as a `savepath` and `100000` as `batch_size`.
 To generate the BN based data, call
 
 ```bash
-python python/dgp.py --batch_size batch_size
+python python/dgp_v2.py --batch_size batch_size
 ```
 Again we used `100000` as batch size.
 
@@ -27,6 +27,10 @@ To evaluate the likelihood of generated counterfactuals, the `get_likelihood.py`
 ```bash
 python python/get_likelihood dgpname cfpath
 ```
-where `dgpname` is the name of the DGP, i.e. in `['twosines', 'cassini', 'pawelczyk', 'bn_5', 'bn_10', 'bn_50', 'bn_100']`.
+where `dgpname` is the name of the DGP, i.e. in `['twosines', 'cassini', 'pawelczyk', 'bn_5_v2', 'bn_10_v2', 'bn_20']`.
 The `cfpath` is the path to the `*_cfs.csv` file containing the counterfactuals for which the likelihood should be evaluated.
 A new file is generated ending in `_cfs_with_log_probs.csv` containing a column with the likelihoods.
+
+## Visualizations
+
+Visualizations of the dataset can be found in the folder 'visualizations/'.
