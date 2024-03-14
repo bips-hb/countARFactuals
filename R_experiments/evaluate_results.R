@@ -3,6 +3,7 @@ library(reshape2)
 library(scales)
 library(patchwork)
 library(data.table)
+library(eaf)
 
 res_folder = file.path("R_experiments/results", Sys.Date())
 dir.create(res_folder)
@@ -15,17 +16,18 @@ res_agg = readRDS("R_experiments/res_agg.Rds")
 # Removed those from evaluation
 
 # Correlation estimated vs. true implausibility
-corr_data = res_agg[!is.na(cor_lik) & !is.na(cor_gow),]
+corr_data = res_agg[!is.na(cor_lik) & !is.na(cor_gow) & dataset != "bn_50_v2",]
 wilcox.test(corr_data$cor_lik, corr_data$cor_gow, alternative = "greater", paired = TRUE)
 table(is.na(res_agg$cor_gow), res_agg$method)
+table(is.na(res_agg$cor_lik), res_agg$method)
 boxplot(cor_lik ~ method, corr_data)
 boxplot(cor_gow ~ method, corr_data)
-# FIXME: weird things with NICE :/
 
 # Plot results -------------------------------------------------------------
 res = readRDS("R_experiments/res.Rds")
 # only have a look on nondom! 
 res = res[nondom == TRUE,]
+res = res[dataset != "bn_50_v2"]
 res[, "plausibility" := exp(log_probs)]
 res[, "sparsity" := 1 - rel_no_changed]
 res[, "proximity" := 1 - dist_x_interest]
@@ -152,3 +154,44 @@ p_main
 
 ggsave(filename = file.path(res_folder,"results_main.png"), plot = p_main, 
    dpi = 200, width = 8.5, height = 7)
+
+
+res[, implausibility := - plausibility]
+res[, inproximity := -proximity]
+res[, insparsity := -sparsity]
+
+for (ds in unique(res$dataset)) {
+  if (ds %in% c("pawelczyk", "two_sines")) {
+    legend = "topright"
+  } else {
+    legend = "bottomleft"
+  }
+  xlim = NULL
+  if (ds == "bn_10") {
+    xlim = c(-0.001, 0.001)
+  } else if (ds == "bn_20") {
+    xlim = c(-4e-08, 4e-08)
+  }
+  pdf(file.path(res_folder, paste0("eafs_prox_", ds, ".pdf")), width = 4, height = 3.5)
+  eafplot(implausibility + inproximity ~ id,
+   groups = method, data=res[dataset == ds,], percentiles = c(50), ylab = "neg. proximity", 
+    xlab = "neg. plausibility",
+    legend.pos = legend, legend.txt = c("ARF", "MOC", "MOCARF", "MOCCTREE", "NICE"), xlim = xlim)
+  dev.off()
+  
+  xlim = NULL
+  legend = "bottomleft"
+  if (ds == "bn_10") {
+    xlim = c(-0.0015, 0)
+  } else if (ds == "bn_20") {
+    xlim = c(-2e-8, 0)
+  }
+  pdf(file.path(res_folder, paste0("eafs_spars_", ds, ".pdf")), width = 4, height = 3.5)
+  eafplot(implausibility + insparsity ~ id,
+    groups = method, data=res[dataset == ds,], percentiles = c(50), ylab = "neg. sparsity", 
+    xlab = "neg. plausibility",
+    legend.pos = legend, legend.txt = c("ARF", "MOC", "MOCARF", "MOCCTREE", "NICE"), xlim = xlim)
+  dev.off()
+}
+
+
