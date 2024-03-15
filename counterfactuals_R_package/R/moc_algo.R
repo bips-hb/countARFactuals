@@ -131,7 +131,7 @@ moc_algo = function(predictor, x_interest, pred_column, target, param_set, lower
       repeat {
         # warning handling
         withCallingHandlers(
-          offspring = mies_generate_offspring(oi, lambda = mu, op_parent, op_m, op_r),
+          offspring <- mies_generate_offspring(oi, lambda = mu, op_parent, op_m, op_r),
           warning = function(w){
             if(grepl("no columns to delete or assign RHS to", w$message)){
               invokeRestart("muffleWarning")
