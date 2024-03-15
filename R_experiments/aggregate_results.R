@@ -1,4 +1,4 @@
-# --- VISUALIZE RESULTS ----
+#--- AGGREGATE RESULTS ---
 library(data.table)
 library(batchtools)
 
@@ -39,8 +39,8 @@ res = res[, implausibility := 1-probs]
 ### nadir per dataset/id 
 hv_measures = c("dist_x_interest", "rel_no_changed", "implausibility")
 
-res[, c("scaled_dist_x_interest", "scaled_rel_no_changed", "scaled_implausibility") := 
-    lapply(.SD, function(x) as.vector(scale(x))), .SDcols = hv_measures, 
+res[, c("scaled_dist_x_interest", "scaled_rel_no_changed", "scaled_implausibility") :=
+    lapply(.SD, function(x) as.vector(scale(x))), .SDcols = hv_measures,
   by = .(dataset)]
 hv_measures = paste0("scaled_", hv_measures)
 nadir = res[, lapply(.SD, max), .SDcols = hv_measures, by = .(dataset)]

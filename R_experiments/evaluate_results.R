@@ -1,3 +1,5 @@
+#--- EVALUATE RESULTS ---
+
 library(ggplot2)
 library(reshape2)
 library(scales)
@@ -11,17 +13,11 @@ dir.create(res_folder)
 res_agg = readRDS("R_experiments/res_agg.Rds")
 
 # Correlation analysis ------------------------------------------------------------
-# FIXME: some correlations NA because all values constant (0 or 1)
-# - 0 plausibility in bn_50_v2 (ARF, MOC), additionally two_sines, bn_5_v2 by NICE
-# Removed those from evaluation
-
 # Correlation estimated vs. true implausibility
 corr_data = res_agg[!is.na(cor_lik) & !is.na(cor_gow) & dataset != "bn_50_v2",]
 wilcox.test(corr_data$cor_lik, corr_data$cor_gow, alternative = "greater", paired = TRUE)
-table(is.na(res_agg$cor_gow), res_agg$method)
-table(is.na(res_agg$cor_lik), res_agg$method)
-boxplot(cor_lik ~ method, corr_data)
-boxplot(cor_gow ~ method, corr_data)
+median(corr_data$cor_lik)
+median(corr_data$cor_gow)
 
 # Plot results -------------------------------------------------------------
 res = readRDS("R_experiments/res.Rds")
@@ -39,11 +35,11 @@ res_agg[, "hypervolume" := hv_normalized]
 res_agg[, "hv*" := log(hv_normalized)]
 
 # Remove bn_50 due to weird hv results
-res_agg <- res_agg[dataset != "bn_50_v2", ]
-res <- res[dataset != "bn_50_v2", ]
+res_agg = res_agg[dataset != "bn_50_v2", ]
+res = res[dataset != "bn_50_v2", ]
 
 # Scale hypervolume for plotting
-scale01 <- function(x){(x-min(x))/(max(x)-min(x))}
+scale01 = function(x){(x-min(x))/(max(x)-min(x))}
 res_agg[, hypervolume := scale01(hypervolume), by = dataset]
 
 res$dataset = factor(res$dataset, levels = c("cassini", "pawelczyk", 
@@ -59,50 +55,9 @@ res_agg$method = factor(res_agg$method, levels = c("NICE", "MOC",
 res$method = factor(res$method, levels = c("NICE", "MOC", 
   "MOCCTREE", "MOCARF", "ARF"))
 
-## remove one outlier in NICE HV 
-#res_subset = res_agg[-which(res_agg$hv_normalized > .2 & res_agg$dataset == "bn_50"), ]
 res_subset = res_agg
 
-# ####  calculate ranks per objective ------
-# res_mean = res_mean[!method %in% c("ARF 200"), 
-#   c("rank_plausibility", "rank_proximity", "rank_sparsity", "rank_runtime") := lapply(.SD, frank, ties.method = "min"), 
-#   .SDcols = c("plausibility", "proximity", "sparsity", "runtime"), 
-#   by = .(dataset, id)]
-# 
-# res_mean = res_mean[!method %in% c("ARF 200"), 
-#   c("rank_plausibility_nondom", "rank_proximity_nondom", "rank_sparsity_nondom") := lapply(.SD, frank, ties.method = "min"), 
-#   .SDcols = c("plausibility_nondom", "proximity_nondom", "sparsity_nondom"), 
-#   by = .(dataset, id)]
-# 
-# combine = function(x, mode = "mean") {
-#   if (mode == "mean") {
-#     m = round(mean(x), 2)
-#     r = round(sd(x), 2) 
-#   } else if (mode == "median") 
-#   {
-#     m = median(x)
-#     r = IQR(x, na.rm = TRUE)
-#   }
-#   paste0(m, " [", r, "]")
-# }
-# 
-# rank_mean = res_mean[, lapply(.SD, combine, mode = "mean"), 
-#   .SDcols = c("rank_plausibility", "rank_proximity", "rank_sparsity", "rank_runtime"), 
-#   by = .(method)]
-# 
-# rank_mean_nondom = res_mean[, lapply(.SD, combine, mode = "mean"), 
-#   .SDcols = c("rank_plausibility_nondom", "rank_proximity_nondom", "rank_sparsity_nondom"), 
-#   by = .(method)]
-# 
-# # print(xtable::xtable(rank_mean[!method %in% c("ARF 200")]), include.rownames = FALSE)
-# print(xtable::xtable(rank_mean_nondom[!method %in% c("ARF 200")]), include.rownames = FALSE)
-
-
-### get figures -----
-# plotdata_agg = data.table(melt(res_agg, id.vars=c("method", "dataset", "id")))
-# plotdata = data.table(melt(res, id.vars=c("method", "dataset", "id")))
-# 
-# boxplot(plausibility ~ method, data = res)
+# boxplot
 
 plot_results = function(data, evaluation_measure = NULL, remove_strip_x = FALSE, 
                         log = FALSE) {
@@ -137,7 +92,6 @@ plot_results = function(data, evaluation_measure = NULL, remove_strip_x = FALSE,
   pl
 }
 
-# To show: 
 res[, plausibility := log(plausibility)]
 p_plaus = plot_results(res, "plausibility") 
 p_prox = plot_results(res, "proximity", remove_strip_x = TRUE, log = FALSE)
@@ -156,7 +110,9 @@ ggsave(filename = file.path(res_folder,"results_main.png"), plot = p_main,
    dpi = 200, width = 8.5, height = 7)
 
 
-res[, implausibility := - plausibility]
+# compute empirical attainment functions
+
+res[, implausibility := -exp(plausibility)]
 res[, inproximity := -proximity]
 res[, insparsity := -sparsity]
 
@@ -168,7 +124,7 @@ for (ds in unique(res$dataset)) {
   }
   xlim = NULL
   if (ds == "bn_10") {
-    xlim = c(-0.001, 0.001)
+    xlim = c(-0.002, 0.001)
   } else if (ds == "bn_20") {
     xlim = c(-4e-08, 4e-08)
   }
@@ -185,6 +141,12 @@ for (ds in unique(res$dataset)) {
     xlim = c(-0.0015, 0)
   } else if (ds == "bn_20") {
     xlim = c(-2e-8, 0)
+  } else if (ds == "cassini") {
+    xlim = c(-3.1, 0)
+  } else if (ds == "two_sines")  {
+    xlim = c(-0.36, 0)
+  } else if (ds == "pawelczyk") {
+    xlim = c(-0.036, 0)
   }
   pdf(file.path(res_folder, paste0("eafs_spars_", ds, ".pdf")), width = 4, height = 3.5)
   eafplot(implausibility + insparsity ~ id,

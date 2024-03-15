@@ -15,7 +15,7 @@ multicore = TRUE
 weight_coverage = c(1, 5, 20)
 weight_proximity = c(1, 5, 20)
 node_selector = c("coverage", "coverage_proximity")
-n_synth = c(20L, 200L)
+n_synth = c(20L)
 num_x_interest = 10L
 
 # Eval strategies
@@ -23,7 +23,7 @@ complex_evaluation = TRUE
 
 # Datasets
 datanams = c("pawelczyk", "cassini", "two_sines",
-  "bn_20", paste("bn", c(5, 10, 50), "v2", sep = "_"))
+  "bn_20", paste("bn", c(5, 10), "v2", sep = "_"))
 
 # Registry ----------------------------------------------------------------
 reg_name = "test"
@@ -163,10 +163,6 @@ cfs = function(data, job, instance, cf_method, weight_coverage, weight_proximity
       colnames(res_nondom) = paste0(colnames(res_nondom), "_nondom")
       res = cbind(res, res_nondom)
       
-      # Evaluate counterfactual set 
-      # res_set = cfexpobj$evaluate_set(plausibility_measure = plausibility_measure, 
-      #   arf = instance$arf, psi = instance$psi)
-      # res = cbind(res, res_set)
     }
     
     # Return all evaluation measures
@@ -200,10 +196,7 @@ algo_design = list(
       weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("MOCCTREE")),
    ## NICE with plausibility
   data.frame(n_synth = "NA", node_selector = "NA", 
-    weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("NICE")),
-  ## WhatIf with plausibility
-    data.frame(n_synth = "NA", node_selector = "NA",
-      weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("WhatIf"))
+    weight_coverage = "NA", weight_proximity = "NA",  cf_method = c("NICE"))
   )
 )
 
@@ -218,57 +211,3 @@ unwrap(getJobPars())
 # Submit -----------------------------------------------------------
 submitJobs()
 waitForJobs()
-
-# # Get results -------------------------------------------------------------
-# res =  flatten(ijoin(reduceResultsDataTable(), getJobPars()))
-# 
-# res[, method := paste(node_selector, weight_coverage, weight_proximity)]
-# res[, dataset := i]
-# 
-# cols <- c("diversity", "no_nondom", 
-#   "frac_nondom", "hypervolume", "dist_x_interest_all", "no_changed_all", 
-#   "neg_lik_all", "dist_x_interest_nondom", "no_changed_nondom", 
-#   "neg_lik_nondom")
-# res_mean <- res[, lapply(.SD, mean), .SDcols = cols, by = .(method, dataset)]
-# 
-# saveRDS(res, "res.Rds")
-# saveRDS(res_mean, "res_mean.Rds")
-# 
-# # Plot results -------------------------------------------------------------
-# res_mean <- readRDS("res_mean.Rds")
-# 
-# # Likelihood
-# p1 = ggplot(res_mean, aes(x = method, y = log(neg_lik_all))) +
-#   geom_boxplot() + 
-#   theme_bw() + 
-#   coord_flip()
-# p2 = ggplot(res_mean, aes(x = method, y = log(neg_lik_nondom))) +
-#   geom_boxplot() + 
-#   theme_bw() + 
-#   coord_flip()
-# p1 / p2
-# 
-# # Distance to x_interest
-# p1 = ggplot(res_mean, aes(x = method, y = dist_x_interest_all)) +
-#   geom_boxplot() + 
-#   theme_bw() + 
-#   coord_flip()
-# p2 = ggplot(res_mean, aes(x = method, y = dist_x_interest_nondom)) +
-#   geom_boxplot() + 
-#   theme_bw() + 
-#   coord_flip()
-# p1 / p2
-# 
-# # Number non-dominated 
-# ggplot(res_mean, aes(x = method, y = no_nondom)) +
-#   geom_boxplot() + 
-#   theme_bw() + 
-#   coord_flip()
-# 
-# # Hypervolume
-# ggplot(res_mean, aes(x = method, y = hypervolume)) +
-#   geom_boxplot() + 
-#   theme_bw() + 
-#   coord_flip()
-# 
-# 
