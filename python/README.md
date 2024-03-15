@@ -34,3 +34,22 @@ A new file is generated ending in `_cfs_with_log_probs.csv` containing a column 
 ## Visualizations
 
 Visualizations of the dataset can be found in the folder 'visualizations/'.
+
+## Overview
+
+```
+.
+    ├── python                   # simulations study
+    │   ├── README.md            # overview
+    │   ├── dgp_v2.py            # script to generate bn data
+    │   ├── get_likelihood.py    # script to evaluate likelihoods
+    │   ├── illustrative.py      # to generate illustrative data
+    │   ├── model_fitting.py     # script to fit model on data and to select factuals
+    │   ├── visualize.py         # contains functions for visualizations
+    │   ├── visualize_data.py    # script that visualizes the datasets
+    │   ├── xgb_loader.R         # to load xgb model in R
+    │   ├── xgb_loader.py        # to load xgb model in python
+    ├── synthetic                # contains illustrative datasets
+    ├── synthetic_v2             # contains bn datasets
+    ├── visualizations           # contains visualizations
+```
