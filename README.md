@@ -15,7 +15,6 @@ This repository contains the code for the countARFactuals paper.
     │   ├── R/MOCClassif.R              # Algo 1 - ARF integrated in MOC
     │   ├── R/CountARFactualClassif.R   # Algo 2 - stand alone ARF method
     ├── python
-    ├── real_world_example
-    ├── cfs         
+    ├── real_world_example     
     └── ...
 ``` 
