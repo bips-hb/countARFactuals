@@ -165,7 +165,6 @@ ScalorNondomPenalized = R6::R6Class("ScalorNondomPenalized", inherit = Scalor,
 )
 
 # Computes crowding distance in target and feature space
-# source: https://github.com/susanne-207/moc/blob/master/counterfactuals/R/generate_counterfactuals.R#L237
 dist_crowding_custom = function(fitnesses, candidates) {
   
   assert_matrix(fitnesses, mode = "numeric", any.missing = FALSE, min.cols = 1, min.rows = 1)
