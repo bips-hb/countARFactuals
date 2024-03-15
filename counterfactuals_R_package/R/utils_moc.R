@@ -563,7 +563,7 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
       row.ids = which(runif(nrow(values)) < private$p_mut)
       
       if (inherits(private$cond_sampler, "arf_multi_sampler")) {
-            evidence <- rbindlist(lapply(row.ids, function(i) {
+            evidence = rbindlist(lapply(row.ids, function(i) {
               fixed = copy(values[i,])
               mutate_cols = flex_features[runif(length(flex_features)) < private$p_mut_gen]
               na_cols = setdiff(colnames(fixed), mutate_cols)
@@ -573,7 +573,7 @@ MutatorConditional = R6::R6Class("MutatorConditional", inherit = Mutator,
                 yhat = paste0("(", min(private$desired_prob), ",", 
                   max(private$desired_prob), ")"))
             }))
-            synth <- forge(private$cond_sampler, n_synth = 1, condition = evidence)
+            synth = forge(private$cond_sampler, n_synth = 1, condition = evidence)
             synth[, yhat := NULL]
             
               my_fun = function(x, name) {

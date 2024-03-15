@@ -138,12 +138,12 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
         psi = private$psi
       }
       # Gower distances
-      leaf_means <- dcast(psi$cnt[variable != "yhat", .(f_idx, variable, mu)], f_idx ~ variable, value.var = "mu")
-      leaf_dist <- data.table(f_idx = leaf_means$f_idx, dist = gower:::gower_dist(leaf_means, private$x_interest))
+      leaf_means = dcast(psi$cnt[variable != "yhat", .(f_idx, variable, mu)], f_idx ~ variable, value.var = "mu")
+      leaf_dist = data.table(f_idx = leaf_means$f_idx, dist = gower:::gower_dist(leaf_means, private$x_interest))
       
       if (private$node_selector == "coverage_proximity") {
         # Use weighted combination of coverage and weights as new leaf weights
-        psi$forest <- merge(psi$forest, leaf_dist, by = "f_idx")
+        psi$forest = merge(psi$forest, leaf_dist, by = "f_idx")
         weight_cvg = private$weight_node_selector[1]
         weight_dist = private$weight_node_selector[2]
         psi$forest[, cvg := exp(weight_cvg*cvg-weight_dist*dist)]
@@ -175,7 +175,7 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
         }
       }
       
-      evidence <- rbindlist(lapply(1:private$n_iterations, function(i) {
+      evidence = rbindlist(lapply(1:private$n_iterations, function(i) {
         max_possible = private$predictor$data$n.features - length(private$fixed_features)
         if (max_possible >= private$max_feats_to_change) {
           max_possible = private$max_feats_to_change
@@ -200,14 +200,14 @@ CountARFactualClassif = R6::R6Class("CountARFactualClassif",
         }
         cols = c(cols, private$fixed_features)
         fixed = copy(private$x_interest)
-        na_cols <- setdiff(colnames(fixed), cols)
+        na_cols = setdiff(colnames(fixed), cols)
         fixed[, (na_cols) := NA]
         evidence = fixed
         evidence = data.table(evidence, 
                               yhat = paste0("(", min(private$desired_prob), ",", 
                                             max(private$desired_prob), ")"))
       }))
-      synth <- forge(psi, n_synth = private$n_synth, condition = evidence)
+      synth = forge(psi, n_synth = private$n_synth, condition = evidence)
       synth[, yhat := NULL]
       
       # Recode factors to original factor levels
