@@ -5,27 +5,21 @@ import pyro.distributions as dist
 import torch
 
 import dgp_v2
-import dgp as dgp_v1
 import illustrative
-from visualize import plot_pairs, get_savepath
+from visualize import plot_pairs
 
-v1_dgps = ['bn_5', 'bn_10', 'bn_50']
 illustrative_dgps = {
     'pawelczyk': illustrative.ModelPawelczyk(),
     'two_sines': illustrative.TwoSines(),
     'cassini': illustrative.Cassini()
 }
-v2_dgps = ['bn_10_v2', 'bn_20', 'bn_100', 'bn_5_v2', 'bn_10_v2', 'bn_50_v2']
-dgp_names = [] + v1_dgps + list(illustrative_dgps.keys()) + v2_dgps
+v2_dgps = ['bn_20', 'bn_5_v2', 'bn_10_v2', 'bn_50_v2']
+dgp_names = [] + list(illustrative_dgps.keys()) + v2_dgps
 
 dgps_root = 'python/synthetic/'
 dgps_v2_root = 'python/synthetic_v2/'
 dgps_path = dgps_root + 'dgps/'
 dgps_v2_path = dgps_v2_root + '/dgps/'
-
-# dgpname = 'bn_50'
-# cf_path = 'cfs/23_02/'
-# p = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument('dgpname') # name of the DGP
@@ -87,7 +81,7 @@ for cf_file in cfs_files:
         if dgpname in v2_dgps:
             model = dgp_v2.DGP.load(dgps_v2_path, dgpname, cfs.shape[0])
         else:
-            model = dgp_v1.DGP.load(dgps_path, dgpname, cfs.shape[0])
+            raise NotImplementedError('DGP not implemented')
         log_probs_0 = model.log_prob(cfss_y[0])
         log_probs_1 = model.log_prob(cfss_y[1])
         log_probs = torch.logsumexp(torch.stack([log_probs_0, log_probs_1]), dim=0)
@@ -97,7 +91,7 @@ for cf_file in cfs_files:
 
     if p:
         try:
-            if dgpname in list(illustrative_dgps.keys()) + v1_dgps:
+            if dgpname in list(illustrative_dgps.keys()): # + v1_dgps
                 background = pd.read_csv(dgps_root + '{}.csv'.format(dgpname))
             elif dgpname in v2_dgps:
                 background = pd.read_csv(dgps_v2_root + '{}.csv'.format(dgpname))

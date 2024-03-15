@@ -554,15 +554,11 @@ if __name__ == '__main__':
     ## generate random models and save them
 
     gen_dict = {
-        # 'bn_10' : (10, 0.5, 0.2),
         'bn_10_v2' : (10, 0.6, 0.3),
         'bn_5_v2' : (5, 0.8, 0.3),
         'bn_20' : (20, 0.4, 0.3),
-        # 'bn_100' : (100, 0.5, 0.5),
-        # 'bn_50_v2' : (50, 0.5, 0.3),
     }
 
-    # name = 'bn_100'
     for name in gen_dict.keys():
         print('Generating {}'.format(name))
         d, p, prop_cat = gen_dict[name]
