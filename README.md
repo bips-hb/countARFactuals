@@ -14,7 +14,9 @@ This repository contains the code for the countARFactuals paper.
     ├── counterfactuals_R_package       # adapted counterfactuals package
     │   ├── R/MOCClassif.R              # Algo 1 - ARF integrated in MOC
     │   ├── R/CountARFactualClassif.R   # Algo 2 - stand alone ARF method
-    ├── python
+    ├── python                          # Generation of synthetic data
+    │   ├── README.md                   # explains scripts in python folder
+    │   ├── ...
     ├── real_world_example     
     └── ...
 ``` 
