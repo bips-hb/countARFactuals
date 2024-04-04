@@ -1,13 +1,19 @@
 Package: countARFactuals
 Type: Package
-Title: Counterfactual Explanations
-Version: 0.1.4
+Title: Counterfactual Explanations - Adaptions ARF approach
+Version: 0.1.4-1
 Authors@R: c(
-        person("xxx", "yy", email = "xxx@gmail.com", role = c("aut", "cre")),
+        person("Susanne", "Dandl", email = "dandls.datascience@gmail.com", role = c("aut", "cre"),
+           comment = c(ORCID = "0000-0003-4324-4163")),
+        person(given = "Marvin N.", family = "Wright", role = c("aut"), email = "cran@wrig.de",
+             comment = c(ORCID = "0000-0002-8542-6291")),
+        person("Andreas", "Hofheinz", email = "andreas.hofheinz@outlook.com", role = c("aut")),
+	person("Martin", "Binder", email = "developer.mb706@mb706.com", role = c("ctb")),
+	person("Giuseppe","Casalicchio", email = "giuseppe.casalicchio@stat.uni-muenchen.de", role = c("ctb"))
     )
-Maintainer: xxxxx xxxx <xxxx.xxxx@gmail.com>
+Maintainer: Susanne Dandl <dandls.datascience@gmail.com>
 Description:  Modular and unified R6-based interface for counterfactual explanation methods.
-URL: xxxx/counterfactuals
+URL: https://github.com/bips-hb/countARFactuals.git
 Depends:
     R (>= 3.5.0)
 Imports: 
