@@ -18,6 +18,15 @@ corr_data = res_agg[!is.na(cor_lik) & !is.na(cor_gow) & dataset != "bn_50_v2",]
 wilcox.test(corr_data$cor_lik, corr_data$cor_gow, alternative = "greater", paired = TRUE)
 median(corr_data$cor_lik)
 median(corr_data$cor_gow)
+gcor = ggplot(corr_data, aes(x = cor_lik)) + 
+  geom_density(aes(color = "o*plaus")) + 
+  theme_bw() + 
+  geom_density(aes(x = cor_gow, color = "o_plaus")) + 
+  scale_colour_manual(name="plausibility",
+    values=c("deepskyblue3", "cornsilk4")) + 
+  xlab("correlation")
+ggsave(filename = file.path(res_folder,"correlations.png"), plot = gcor, 
+  dpi = 200, width = 5, height = 2)
 
 # Plot results -------------------------------------------------------------
 res = readRDS("R_experiments/res.Rds")
@@ -70,7 +79,7 @@ plot_results = function(data, evaluation_measure = NULL, remove_strip_x = FALSE,
   colours = c("ARF" = "deepskyblue3", "MOCARF" = "deepskyblue1", 
     "MOCCTREE" = "cornsilk4", "MOC" = "cornsilk3", "NICE" = "cornsilk2")
   pl = ggplot(data, aes(x = method, y = evalmeasure, fill = method)) + 
-    geom_boxplot() + 
+    geom_boxplot(outlier_size = 0.5) +
     coord_flip() +
     facet_grid(measure ~ dataset, scales = "free") + 
     theme_bw() + 
@@ -107,7 +116,7 @@ p_main = p_plaus / p_prox / p_sparse / p_hv / p_no / p_runtime
 p_main
 
 ggsave(filename = file.path(res_folder,"results_main.png"), plot = p_main, 
-   dpi = 200, width = 8.5, height = 7)
+   dpi = 200, width = 8.5, height = 7.5)
 
 
 # compute empirical attainment functions
